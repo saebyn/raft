@@ -9,18 +9,21 @@
   (append-entry [raft term command highest-committed-index last-term last-index] "Appends an entry to the raft's log"))
 
 
-(defn entry-exists? [log term index]
-  false)
+(defn- entry-exists? [log term index]
+  (or (and (nil? term) (nil? index))
+      (let [entry (get log index)]
+        (and (not (nil? entry))
+             (= (:term entry) term)))))
 
 
-(defn append-entry-command [log term command]
+(defn- append-entry-command [log term command]
   (conj log (Entry. term command)))
 
 
 (defn append-entry [raft term command highest-committed-index last-term last-index]
-  (let [log (:log raft)]
-    (when (or (empty? log) (entry-exists? log last-term last-index))
-      (update-in raft [:log] append-entry-command term command))))
+  (if (entry-exists? (:log raft) last-term last-index)
+    (update-in raft [:log] append-entry-command term command)
+    raft))
 
 
 (extend Raft
