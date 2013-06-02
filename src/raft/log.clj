@@ -6,7 +6,8 @@
 (defrecord Entry [term command])
 
 (defprotocol ILog
-  (append-entry [raft term command highest-committed-index last-term last-index] "Appends an entry to the raft's log"))
+  (append-entry [raft term command highest-committed-index last-term last-index] "Appends an entry to the raft's log")
+  (as-complete? [raft current-term last-term last-index] "Returns non-nil if the last item is in the log and an item in the log has the current term"))
 
 
 (defn- entry-exists? [log term index]
@@ -26,6 +27,12 @@
     raft))
 
 
+(defn as-complete? [raft current-term last-term last-index]
+  (and (entry-exists? (:log raft) last-term last-index)
+       (seq (filter #(= current-term %) (map :term (:log raft))))))
+
+
 (extend Raft
   ILog
-  {:append-entry append-entry})
+  {:append-entry append-entry
+   :as-complete? as-complete?})

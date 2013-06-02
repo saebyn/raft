@@ -1,14 +1,14 @@
 (ns raft.core)
 
 
-(defrecord Raft [rpc store log current-term servers election-timeout state-machine leader?])
+(defrecord Raft [rpc store log current-term servers election-timeout state-machine leader-state])
 
 
 
 ;
 ; create-raft
 ;
-; `rpc` should be a function (fn [server rpc-name & args] result)
+; `rpc` should be a function (fn [server rpc-name & args] (future result))
 ; where server is an opaque entry in the servers sequence.
 ;
 ; `store` should be a function (fn ([key value] nil) ([key] value))
@@ -34,4 +34,4 @@
 (defn create-raft
   [rpc store state-machine servers & {:keys [election-timeout election-term]
                                       :or {election-timeout 150 election-term 0}}]
-  (Raft. rpc store [] election-term servers election-timeout state-machine false))
+  (Raft. rpc store [] election-term servers election-timeout state-machine :follower))
