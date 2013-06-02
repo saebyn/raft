@@ -20,7 +20,7 @@
 (defn append-entry [raft term command highest-committed-index last-term last-index]
   (let [log (:log raft)]
     (when (or (empty? log) (entry-exists? log last-term last-index))
-      (append-entry-command (:log raft) term command))))
+      (update-in raft [:log] append-entry-command term command))))
 
 
 (extend Raft

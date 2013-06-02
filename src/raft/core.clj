@@ -33,5 +33,5 @@
 ;
 (defn create-raft
   [rpc store state-machine servers & {:keys [election-timeout election-term]
-                                      :or {:election-timeout 150 :election-term 0}}]
+                                      :or {election-timeout 150 election-term 0}}]
   (Raft. rpc store [] election-term servers election-timeout state-machine false))
