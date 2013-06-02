@@ -8,7 +8,7 @@
 
 
 (defn request-vote [raft candidate-term candidate-server last-log-index last-log-term]
-  {:raft raft :term candidate-term :vote-granted false})
+  {:raft raft :term (:current-term raft) :vote-granted false})
 
 
 (extend Raft
