@@ -1,8 +1,7 @@
 (ns raft.core)
 
 
-(defrecord Raft [rpc store log current-term servers election-timeout state-machine leader-state])
-
+(defrecord Raft [rpc store log current-term servers election-timeout state-machine leader-state voted-for election-timeout-remaining commit-index])
 
 
 ;
@@ -34,4 +33,6 @@
 (defn create-raft
   [rpc store state-machine servers & {:keys [election-timeout election-term]
                                       :or {election-timeout 150 election-term 0}}]
-  (Raft. rpc store [] election-term servers election-timeout state-machine :follower))
+  (Raft. rpc store [] election-term servers
+         election-timeout state-machine
+         :follower nil nil nil))
