@@ -93,8 +93,8 @@
   (let [last-entry (last (:log raft))
         last-entry-term (:term last-entry)]
     (if (= last-entry-term last-term)
-      (<= (count (:log raft)) (inc last-index))
-      (<= last-entry-term last-term))))
+      (<= (count (:log raft)) (inc (or last-index 0)))
+      (<= (or last-entry-term -1) (or last-term -1)))))
 
 
 (extend Raft

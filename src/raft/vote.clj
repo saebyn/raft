@@ -1,6 +1,7 @@
 (ns raft.vote
   (:use raft.core)
-  (:use raft.log)
+  (:require [raft.heartbeat :as heartbeat]
+            [raft.log :as log])
   (:import [raft.core Raft]))
 
 
@@ -17,10 +18,21 @@
 
 
 (defn request-vote [raft candidate-term candidate-server last-log-index last-log-term]
-  (let [raft (update-term-if-newer raft candidate-term)]
-    {:raft raft
+  (let [raft (update-term-if-newer raft candidate-term)
+        voted-for (:voted-for raft)
+        vote-granted (and
+                       (not (< candidate-term (:current-term raft)))
+                       (or (nil? voted-for) (= candidate-server voted-for))
+                       (log/as-complete? raft last-log-term last-log-index))
+        raft (if vote-granted
+               (heartbeat/reset-election-timeout raft)
+               raft)
+        voted-for (if vote-granted
+                    candidate-server
+                    voted-for)]
+    {:raft (assoc raft :voted-for voted-for)
      :term (:current-term raft)
-     :vote-granted (as-complete? raft last-log-term last-log-index)}))
+     :vote-granted vote-granted}))
 
 
 (extend Raft
