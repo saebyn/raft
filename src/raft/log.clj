@@ -30,7 +30,8 @@
   (.indexOf (mapv not= (mapv :term log) (mapv :term entries)) true))
 
 
-(defn- remove-conflicting-entries [raft last-index entries]
+(defn- remove-conflicting-entries
+  [raft last-index entries]
   (assert (or
             (and (nil? last-index) (zero? (count (:log raft))))
             (>= (dec (count (:log raft))) last-index)))
@@ -50,7 +51,8 @@
           [raft entries])))))
 
 
-(defn- apply-commits [raft new-commit-index]
+(defn- apply-commits
+  [raft new-commit-index]
   (let [commit-index (or (:commit-index raft) -1)
         raft (assoc raft :commit-index new-commit-index)]
     (assert (not (nil? raft)))
@@ -68,7 +70,8 @@
       raft)))
 
 
-(defn append-entries [raft term entries highest-committed-index last-term last-index]
+(defn append-entries-impl
+  [raft term entries highest-committed-index last-term last-index]
   (let [current-term (:current-term raft)]
     (if (< term current-term)
       {:raft raft :term current-term :success false}
@@ -89,7 +92,8 @@
           {:raft raft :term term :success false})))))
 
 
-(defn as-complete? [raft last-term last-index]
+(defn as-complete?
+  [raft last-term last-index]
   (let [last-entry (last (:log raft))
         last-entry-term (:term last-entry)]
     (if (= last-entry-term last-term)
@@ -99,5 +103,8 @@
 
 (extend Raft
   ILog
-  {:append-entries append-entries
+  {:append-entries (fn [raft & rest]
+                     (update-in
+                       (apply append-entries-impl raft rest) [:raft] persist))
+
    :as-complete? as-complete?})

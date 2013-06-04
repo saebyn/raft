@@ -9,7 +9,8 @@
   (request-vote [raft candidate-term candidate-server last-log-index last-log-term] "Requests that this raft votes for the candidate"))
 
 
-(defn- update-term-if-newer [raft new-term]
+(defn- update-term-if-newer
+  [raft new-term]
   (if (> new-term (:current-term raft))
     (-> raft
       (assoc :current-term new-term)
@@ -17,7 +18,8 @@
     raft))
 
 
-(defn request-vote [raft candidate-term candidate-server last-log-index last-log-term]
+(defn request-vote-impl
+  [raft candidate-term candidate-server last-log-index last-log-term]
   (let [raft (update-term-if-newer raft candidate-term)
         voted-for (:voted-for raft)
         vote-granted (and
@@ -37,4 +39,6 @@
 
 (extend Raft
   IVote
-  {:request-vote request-vote})
+  {:request-vote (fn [raft & rest]
+                   (update-in
+                     (apply request-vote-impl raft rest) [:raft] persist))})

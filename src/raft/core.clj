@@ -1,7 +1,21 @@
 (ns raft.core)
 
 
-(defrecord Raft [rpc store log current-term servers election-timeout state-machine leader-state voted-for election-timeout-remaining commit-index])
+(defprotocol IPersist
+  (persist [raft] "Persists the essential state of the raft"))
+
+
+(defrecord Raft [rpc store log current-term servers election-timeout
+                 state-machine leader-state voted-for
+                 election-timeout-remaining commit-index]
+  IPersist
+  (persist [raft]
+    (let [store (:store raft)]
+      (store :log (:log raft))
+      (store :current-term (:current-term raft))
+      (store :voted-for (:voted-for raft)))
+    raft))
+
 
 
 ;
@@ -12,7 +26,8 @@
 ;
 ; `store` should be a function (fn ([key value] nil) ([key] value))
 ; that persists the keys and their associated values to a non-volatile
-; media.
+; media. The 1-arity function should return nil if the key is not stored.
+; The persistence mechanism should be synchronous.
 ;
 ; `state-machine` should be a function (fn [input] [result new-state-machine])
 ; where input is the command to be executed by the state machine from the log,
@@ -33,6 +48,13 @@
 (defn create-raft
   [rpc store state-machine servers & {:keys [election-timeout election-term]
                                       :or {election-timeout 150 election-term 0}}]
-  (Raft. rpc store [] election-term servers
-         election-timeout state-machine
-         :follower nil nil nil))
+  (Raft. rpc store
+         (or (store :log) [])
+         (or (store :current-term) election-term)
+         servers
+         election-timeout
+         state-machine
+         :follower
+         (store :voted-for)
+         nil
+         nil))
