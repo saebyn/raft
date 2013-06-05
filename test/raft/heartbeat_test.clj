@@ -2,7 +2,7 @@
   (:use midje.sweet)
   (:require [raft.heartbeat :refer :all]
             [raft.core :refer :all]
-            [raft.election :as election]))
+            [raft.leader :as leader]))
 
 
 (facts "about heartbeat"
@@ -17,8 +17,10 @@
                           (assoc :election-timeout-remaining 0))]
                (heartbeat raft) => anything
                (provided
-                (election/become-candidate raft) => anything))
+                (leader/become-candidate raft) => anything))
              (let [raft (create-raft ..rpc.. ..store.. ..state-machine.. [..server2.. ..server3..] :election-timeout 10)]
                (heartbeat raft) => anything
                (provided
-                (election/become-candidate raft) => anything :times 0))))
+                (leader/become-candidate raft) => anything :times 0)))
+
+       (future-fact "pushes append-entries RPC to followers if leader"))

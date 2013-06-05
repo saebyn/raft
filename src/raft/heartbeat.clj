@@ -1,6 +1,6 @@
 (ns raft.heartbeat
   (:use raft.core)
-  (:require [raft.election :as election])
+  (:require [raft.leader :as leader])
   (:import [raft.core Raft]))
 
 
@@ -25,7 +25,7 @@
     (if-not (or
               (pos? (:election-timeout-remaining raft))
               (= :leader (:leader-state raft)))
-      (election/become-candidate raft)
+      (leader/become-candidate raft)
       raft)))
 
 
