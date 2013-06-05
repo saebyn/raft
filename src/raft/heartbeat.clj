@@ -1,5 +1,6 @@
 (ns raft.heartbeat
   (:use raft.core)
+  (:require [raft.election :as election])
   (:import [raft.core Raft]))
 
 
@@ -21,7 +22,11 @@
 (defn heartbeat [raft]
   (if (nil? (:election-timeout-remaining raft))
     (reset-election-timeout raft)
-    raft))
+    (if-not (or
+              (pos? (:election-timeout-remaining raft))
+              (= :leader (:leader-state raft)))
+      (election/become-candidate raft)
+      raft)))
 
 
 (defn reset-election-timeout [raft]

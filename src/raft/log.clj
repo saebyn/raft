@@ -55,8 +55,6 @@
   [raft new-commit-index]
   (let [commit-index (or (:commit-index raft) -1)
         raft (assoc raft :commit-index new-commit-index)]
-    (assert (not (nil? raft)))
-    (assert (not (nil? (:log raft))))
     (assert (> (count (:log raft)) commit-index))
     (assert (or (nil? new-commit-index) (> (count (:log raft)) new-commit-index)))
     (assert (or (nil? new-commit-index) (>= new-commit-index commit-index)))
