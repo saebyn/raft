@@ -22,7 +22,7 @@
 ; create-raft
 ;
 ; `rpc` should be a function (fn [server rpc-name & args] (future result))
-; where server is an opaque entry in the servers sequence.
+; where server is an opaque entry from the servers sequence.
 ;
 ; `store` should be a function (fn ([key value] nil) ([key] value))
 ; that persists the keys and their associated values to a non-volatile
@@ -51,7 +51,7 @@
   (Raft. rpc store
          (or (store :log) [])
          (or (store :current-term) election-term)
-         servers
+         (into {} (mapv #(vector % {}) servers))
          election-timeout
          state-machine
          :follower
