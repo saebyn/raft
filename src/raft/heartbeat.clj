@@ -19,7 +19,9 @@
 
 
 (defn heartbeat [raft]
-  raft)
+  (if (nil? (:election-timeout-remaining raft))
+    (reset-election-timeout raft)
+    raft))
 
 
 (defn reset-election-timeout [raft]
