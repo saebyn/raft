@@ -9,7 +9,14 @@
 
 
 (defn become-candidate-impl [raft]
-  raft)
+  (let [raft (-> raft
+               (update-in [:current-term] inc)
+               (assoc :leader-state :candidate))
+        params ((juxt :current-term :this-server last-index last-term) raft)
+        servers (remove #(= (:this-server raft) %) (keys (:servers raft)))]
+    (doall
+      (map #(apply (:rpc raft) % :request-vote params) servers))
+    raft))
 
 
 (defn become-leader-impl [raft]

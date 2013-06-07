@@ -6,16 +6,34 @@
 
 (facts "about election"
        (facts "about become-candidate"
-              (future-fact "increments the current term")
-              (future-fact "makes the raft a candidate")
-              (future-fact "sends request-vote RPCs to each server")
+              (prerequisite
+                (--rpc-- ..server1..
+                         :request-vote
+                         1
+                         ..server2..
+                         nil
+                         nil) => (future {:term 1 :vote-granted false}) :times 1
+                (--rpc-- ..server3..
+                         :request-vote
+                         1
+                         ..server2..
+                         nil
+                         nil) => (future {:term 1 :vote-granted false}) :times 1)
 
-              (facts "about getting higher term from request-vote RPC"
-                     (future-fact "updates current term")
-                     (future-fact "becomes a follower"))
+              (let [raft (core/create-raft --rpc-- ..store.. ..state-machine.. ..server2.. [..server1.. ..server2.. ..server3..])]
+                (fact "increments the current term"
+                      (become-candidate raft) => (contains {:current-term (inc (:current-term raft))}))
+  
+                (fact "makes the raft a candidate"
+                      (become-candidate raft) => (contains {:leader-state :candidate}))
 
-              (future-fact "becomes a leader if request-vote responses electing the raft are a majority")
-              (future-fact "persists the raft"))
+                (facts "about getting higher term from request-vote RPC"
+                       (let [raft raft]
+                         (future-fact "updates current term")
+                         (future-fact "becomes a follower")))
+
+                (future-fact "becomes a leader if request-vote responses electing the raft are a majority")
+                (future-fact "persists the raft")))
 
        (facts "about become-leader"
               (future-fact "makes the raft a leader")

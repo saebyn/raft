@@ -61,6 +61,7 @@
     (if-not (nil? new-commit-index)
       (loop [state-machine (:state-machine raft)
              entries (subvec (:log raft) (inc commit-index) (inc new-commit-index))]
+        (assert (not (nil? state-machine)))
         (if (seq entries)
           (recur (second (state-machine (:command (first entries))))
                  (rest entries))
@@ -91,12 +92,10 @@
 
 
 (defn as-complete?
-  [raft last-term last-index]
-  (let [last-entry (last (:log raft))
-        last-entry-term (:term last-entry)]
-    (if (= last-entry-term last-term)
-      (<= (count (:log raft)) (inc (or last-index 0)))
-      (<= (or last-entry-term -1) (or last-term -1)))))
+  [raft term index]
+  (if (= (last-term raft) term)
+    (<= (count (:log raft)) (inc (or index 0)))
+    (<= (or (last-term raft) -1) (or term -1))))
 
 
 (extend Raft

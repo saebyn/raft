@@ -5,8 +5,8 @@
   (persist [raft] "Persists the essential state of the raft"))
 
 
-(defrecord Raft [rpc store log current-term servers election-timeout
-                 state-machine leader-state voted-for
+(defrecord Raft [rpc store log current-term this-server servers
+                 election-timeout state-machine leader-state voted-for
                  election-timeout-remaining commit-index]
   IPersist
   (persist [raft]
@@ -16,6 +16,10 @@
       (store :voted-for (:voted-for raft)))
     raft))
 
+
+(def last-index (comp #(when-not (neg? %) %) dec count :log))
+
+(def last-term (comp :term last :log))
 
 
 ;
@@ -35,6 +39,8 @@
 ; new-state-machine is a function like the original state machine function
 ; but closed over the new state.
 ;
+; `this-server` should be the server identifier for this server.
+;
 ; `servers` should be a sequence of server identifiers, excluding this
 ; server.
 ;
@@ -46,11 +52,12 @@
 ;
 ;
 (defn create-raft
-  [rpc store state-machine servers & {:keys [election-timeout election-term]
-                                      :or {election-timeout 150 election-term 0}}]
+  [rpc store state-machine this-server servers & {:keys [election-timeout election-term]
+                                                  :or {election-timeout 150 election-term 0}}]
   (Raft. rpc store
          (or (store :log) [])
          (or (store :current-term) election-term)
+         this-server
          (into {} (mapv #(vector % {}) servers))
          election-timeout
          state-machine
