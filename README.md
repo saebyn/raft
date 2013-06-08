@@ -6,6 +6,9 @@ See "In Search of an Understandable Consensus Algorithm" by Diego Ongaro and
 John Ousterhout of Stanford University.
 
 
+This is a work in progress.
+
+
 ## Usage
 
 FIXME
