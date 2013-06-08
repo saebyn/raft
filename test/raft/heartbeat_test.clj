@@ -6,6 +6,9 @@
 
 
 (facts "about heartbeat"
+       (prerequisite
+         (--rpc-- anything anything ..term.. anything anything anything) => (future {:vote-granted false :term ..term..}))
+
        (fact "resets election timeout if it hasn't been set"
              (let [raft (create-raft --rpc-- ..store.. ..state-machine.. ..server.. ..servers.. :election-timeout 10)]
                (heartbeat raft)) => (contains {:election-timeout-remaining #(>= % 10)})

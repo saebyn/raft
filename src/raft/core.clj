@@ -1,13 +1,14 @@
-(ns raft.core)
+(ns raft.core
+  (:use midje.open-protocols))
 
 
 (defprotocol IPersist
   (persist [raft] "Persists the essential state of the raft"))
 
 
-(defrecord Raft [rpc store log current-term this-server servers
-                 election-timeout state-machine leader-state voted-for
-                 election-timeout-remaining commit-index]
+(defrecord-openly Raft [rpc store log current-term this-server servers
+                        election-timeout state-machine leader-state voted-for
+                        election-timeout-remaining commit-index]
   IPersist
   (persist [raft]
     (let [store (:store raft)]
