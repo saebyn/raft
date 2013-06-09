@@ -72,13 +72,33 @@
 
 
 (defn become-leader-impl [raft]
-  (let [next-index (inc (or (last-index raft) -1))]
-    (-> raft
-      (assoc :leader-state :leader)
-      (update-in [:servers]
-                 #(into {}
-                        (map (fn [[server details]]
-                               [server (assoc details :next-index next-index)]) %))))))
+  (let [next-index (inc (or (last-index raft) -1))
+        rpc-params (-> raft
+                     ((juxt :current-term :this-server last-index last-term))
+                     vec
+                     (conj []) ; Add empty entries arg
+                     (conj (:commit-index raft)))
+
+        requests (get-server-requests raft)
+        
+        raft (-> raft
+               (assoc :leader-state :leader)
+               (update-in [:servers]
+                          #(into {}
+                                 (map (fn [[server details]]
+                                        [server (assoc details :next-index next-index)]) %))))]
+
+    (doseq [req requests]
+      (set-error-mode! req :contine)
+      (set-error-handler! req (fn [ag ex]
+                                ; TODO logging?
+                                (println "rpc failure"  ag ex)
+                              )))
+
+    (apply await (map
+             #(send-off % (fn [server] @(apply (:rpc raft) server :append-entry rpc-params)))
+             requests))
+    raft))
 
 
 (defn push-impl [raft]
