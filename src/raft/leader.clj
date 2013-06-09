@@ -21,6 +21,8 @@
 
 
 (defn- get-server-requests [raft]
+  ; Although the servers map shouldn't include this server in it,
+  ; best to be safe and make sure it's not in there.
   (map agent (remove #(= (:this-server raft) %) (keys (:servers raft)))))
 
 
@@ -70,7 +72,13 @@
 
 
 (defn become-leader-impl [raft]
-  (assoc raft :leader-state :leader))
+  (let [next-index (inc (or (last-index raft) -1))]
+    (-> raft
+      (assoc :leader-state :leader)
+      (update-in [:servers]
+                 #(into {}
+                        (map (fn [[server details]]
+                               [server (assoc details :next-index next-index)]) %))))))
 
 
 (defn push-impl [raft]
@@ -81,4 +89,4 @@
   ILeader
   {:become-candidate (comp persist become-candidate-impl)
    :become-leader become-leader-impl
-   :push push-impl})
+   :push (comp persist push-impl)})

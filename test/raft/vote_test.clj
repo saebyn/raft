@@ -7,7 +7,7 @@
 
 
 (facts "about vote"
-       (let [raft (core/create-raft --rpc-- ..store.. ..state-machine.. ..server2.. [..server1.. ..server2..] :election-timeout 2)]
+       (let [raft (core/create-raft --rpc-- ..store.. ..state-machine.. ..server2.. [..server1..] :election-timeout 2)]
          (facts "about request-vote"
                 (fact "does nothing if the current term is old"
                       (let [raft (assoc raft :current-term 1)]

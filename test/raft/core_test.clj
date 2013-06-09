@@ -6,4 +6,11 @@
 
 (facts "about core"
        (fact "create-raft constructs a Raft record"
-             (create-raft --rpc-- ..store.. ..state-machine.. ..server.. [..server..]) => (Raft. --rpc-- ..store.. [] 0 ..server.. {..server.. {}} 150 ..state-machine.. :follower nil nil nil)))
+             (create-raft
+               --rpc-- ..store.. ..state-machine..
+               ..server.. [..other-server..]) => (Raft. --rpc-- ..store.. [] 0
+                                                        ..server..
+                                                        {..other-server.. {}}
+                                                        150 ..state-machine..
+                                                        :follower
+                                                        nil nil nil)))
