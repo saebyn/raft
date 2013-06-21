@@ -40,11 +40,13 @@
     ; of the votes, or a majority becomes impossible.
     ; - could use a promise, where the handler checks for majority and resolves
     ;   the promise when its found - use timeout with deref to get timeout effect
-    (send-rpc raft
-              :request-vote
-              []
-              (:election-timeout-remaining raft)
-              (partial vote-response-handler current-term votes))
+    (dorun
+      (map
+        (partial vote-response-handler current-term votes)
+        (send-rpc raft
+                  :request-vote
+                  []
+                  (:election-timeout-remaining raft))))
 
     (if (> @current-term initial-term)
       ; Return to being a follower because another server has a more recent
@@ -97,6 +99,8 @@
     ; TODO if follower sends back newer term, use it and become follower
     ; TODO if succeeds, update next-index
     ; TODO if fails, dec next-index and retry
+    ;   we retry by building a new map of servers to entries, where
+    ;   only the servers we want to retry are included.
     raft))
 
 

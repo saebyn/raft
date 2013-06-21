@@ -39,13 +39,15 @@
 ; `params` should be either a list of parameters that are sent
 ; to all servers, or should be a map from server identifier to
 ; the list of parameters to send to each server.
+; If `params` is a map and a server is ommitted from it, the
+; server will not be sent an RPC.
 ; If the timeout is provided, the operation will abort if it
 ; takes longer than `timeout` milliseconds.
 (defn send-rpc
-  ([raft command params timeout callback]
+  ([raft command params timeout]
    (let [get-params (fn [server]
                       (if (map? params)
-                        (get params server [])
+                        (get params server nil)
                         params))
          rpc (fn [[server params]]
                (call-rpc raft server command params))
@@ -53,22 +55,20 @@
                     :servers
                     keys
                     ((juxt identity get-params))
+                    (remove #(nil? (second %)))
                     (map agent))]
      (doseq [request requests]
        (set-error-mode! request :contine)
        (set-error-handler! request (fn [ag ex]
                                      ; TODO logging?
                                      (println "rpc failure"  ag ex)))
-       (send-off request rpc)
-       (when callback
-         (send-off request callback)))
+       (send-off request rpc))
      (if timeout
        (apply await-for timeout requests)
-       (apply await requests))))
-  ([raft command params callback]
-   (send-rpc raft command params nil callback))
+       (apply await requests))
+     (map (fn [r] (when-not (agent-error r) @r)) requests)))
   ([raft command params]
-   (send-rpc raft command params nil nil)))
+   (send-rpc raft command params nil)))
 
 
 

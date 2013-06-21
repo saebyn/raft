@@ -66,19 +66,28 @@
                         (core/send-rpc anything :append-entries [[] nil]) => ..raft.. :times 1))))
 
 
-       (facts "about push"
-              (let [raft (-> (core/create-raft good-append-rpc --store-- --state-machine-- ..server2.. [..server1.. ..server3..])
-                           (log/append-entries 0 [[..term.. ..command1..] [..term.. ..command2..]] nil nil nil)
-                           :raft
-                           become-leader
-                           (assoc-in [:servers ..server1.. :next-index] 0))]
-                (fact "sends next batch of entries to each server"
+       (let [raft (-> (core/create-raft good-append-rpc --store-- --state-machine-- ..server2.. [..server1.. ..server3..])
+                    (log/append-entries 0 [[1 ..command1..] [2 ..command2..]] nil nil nil)
+                    :raft
+                    become-leader)]
+         (facts "about push"
+                (let [raft (assoc-in raft [:servers ..server1.. :next-index] 0)]
+                  (fact "sends next batch of entries to each server"
+                        (push raft) => anything
+                        (provided
+                          (core/send-rpc anything :append-entries {..server1.. [[[1 ..command1..] [2 .command2..]] nil]
+                                                                   ..server3.. [[] nil]}) => anything :times 1)))
+
+                (fact "sends empty append-entries RPC when no entries are pending"
                       (push raft) => anything
                       (provided
-                        (core/send-rpc anything :append-entries {..server1.. [[[..term.. ..command1..] [..term.. ..command2..]] nil]
-                                                                 ..server3.. [[] nil]}) => anything :times 1)))
-              (future-fact "sends empty append-entries RPC when no entries are pending")
-              (future-fact "decrements next-index and retries if append-entries RPC fails due to inconsistency")
-              (future-fact "marks entries as committed")
-              (future-fact "applies newly commited entries to state machine")
-              (future-fact "becomes follower if append-entries RPC returns newer term")))
+                        (core/send-rpc anything :append-entries {..server1.. [[] nil]
+                                                                 ..server3.. [[] nil]}) => anything :times 1))
+
+                (future-fact "decrements next-index and retries if append-entries RPC fails due to inconsistency")
+
+                (future-fact "marks entries as committed")
+
+                (future-fact "applies newly commited entries to state machine")
+
+                (future-fact "becomes follower if append-entries RPC returns newer term"))))
