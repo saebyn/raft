@@ -5,25 +5,16 @@
 
 (defprotocol ILeader
   (become-candidate [raft] "Makes the raft a candidate.")
-  (become-leader [raft] "Makes the raft a leader."))
+  (become-leader [raft] "Makes the raft a leader.")
+  (push [raft] "Pushed pending entries from the log to all followers."))
 
 
-(defn- vote-response-handler [server rpc params current-term votes]
-  ; Block on response to RPC.
-  (let [pending-request (apply rpc server :request-vote params)]
-    (let [{term :term
-           vote-granted :vote-granted} @pending-request]
-      ; Update current term to newest
-      (swap! current-term max term)
-      ; Add the vote, if granted
-      (when vote-granted
-        (swap! votes inc)))))
-
-
-(defn- get-server-requests [raft]
-  ; Although the servers map shouldn't include this server in it,
-  ; best to be safe and make sure it's not in there.
-  (map agent (remove #(= (:this-server raft) %) (keys (:servers raft)))))
+(defn- vote-response-handler [current-term votes {term :term vote-granted :vote-granted}]
+  ; Update current term to newest
+  (swap! current-term max term)
+  ; Add the vote, if granted
+  (when vote-granted
+    (swap! votes inc)))
 
 
 (defn become-candidate-impl [raft]
@@ -32,16 +23,12 @@
                (assoc :leader-state :candidate))
         initial-term (:current-term raft)
 
-        rpc-params ((juxt :current-term :this-server last-index last-term) raft)
-
-
         ; Votes for our election, include a vote for ourself.
         votes (atom 1)
         ; The highest seen term, initially the known current term.
         current-term (atom initial-term)
 
-        requests (get-server-requests raft)
-        server-count (inc (count requests))]
+        server-count (inc (count (:servers raft)))]
 
     ; Dispatch out the RPC to each request agent
     ; Block for all agents to finish the RPC operation, but only until
@@ -53,8 +40,11 @@
     ; of the votes, or a majority becomes impossible.
     ; - could use a promise, where the handler checks for majority and resolves
     ;   the promise when its found - use timeout with deref to get timeout effect
-    (apply await-for (:election-timeout-remaining raft)
-           (map #(send-off % vote-response-handler (:rpc raft) rpc-params current-term votes) requests))
+    (send-rpc raft
+              :request-vote
+              []
+              (:election-timeout-remaining raft)
+              (partial vote-response-handler current-term votes))
 
     (if (> @current-term initial-term)
       ; Return to being a follower because another server has a more recent
@@ -73,36 +63,41 @@
 
 (defn become-leader-impl [raft]
   (let [next-index (inc (or (last-index raft) -1))
-        rpc-params (-> raft
-                     ((juxt :current-term :this-server last-index last-term))
-                     vec
-                     (conj []) ; Add empty entries arg
-                     (conj (:commit-index raft)))
+        rpc-params  [[] (:commit-index raft)]
 
-        requests (get-server-requests raft)
-        
         raft (-> raft
                (assoc :leader-state :leader)
                (update-in [:servers]
                           #(into {}
                                  (map (fn [[server details]]
-                                        [server (assoc details :next-index next-index)]) %))))]
+                                        [server
+                                         (assoc details :next-index next-index)]) %))))]
 
-    (doseq [req requests]
-      (set-error-mode! req :contine)
-      (set-error-handler! req (fn [ag ex]
-                                ; TODO logging?
-                                (println "rpc failure"  ag ex)
-                              )))
-
-    (apply await (map
-             #(send-off % (fn [server] @(apply (:rpc raft) server :append-entry rpc-params)))
-             requests))
+    (send-rpc raft :append-entries rpc-params)
     raft))
 
 
+(defn- get-entries-to-send [raft [server {next-index :next-index}]]
+  (assert (<= next-index (count (:log raft))))
+  (let [next-entries (map (juxt :term :command)
+                          (-> raft
+                            :log
+                            (subvec next-index)))]
+    [server [next-entries (:commit-index raft)]]))
+
+
 (defn push-impl [raft]
-  raft)
+  (let [; decide which entries to send
+        pending-entries (->> raft
+                          :servers
+                          (map (partial get-entries-to-send raft))
+                          (into {}))]
+    ; send entries, wait for response
+    (send-rpc raft :append-entries pending-entries)
+    ; TODO if follower sends back newer term, use it and become follower
+    ; TODO if succeeds, update next-index
+    ; TODO if fails, dec next-index and retry
+    raft))
 
 
 (extend Raft

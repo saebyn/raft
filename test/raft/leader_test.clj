@@ -1,6 +1,7 @@
 (ns raft.leader-test
   (:use midje.sweet)
   (:require [raft.core :as core]
+            [raft.log :as log]
             [raft.heartbeat :as heartbeat]
             [raft.leader :refer :all]))
 
@@ -59,17 +60,23 @@
                       (become-leader raft) => (contains {:servers (just {..server1.. {:next-index 0}
                                                                          ..server3.. {:next-index 0}})}))
 
-                
-                ;; Broken
-                ;(fact "sends empty append-entries RPC to all servers"
-                ;      (become-leader raft) => anything
-                ;      (provided
-                ;        (good-append-rpc ..server1.. :append-entry 0 ..server2.. nil nil [] nil) => anything :times 1
-                ;        (good-append-rpc ..server3.. :append-entry 0 ..server2.. nil nil [] nil) => anything :times 1))
-                ))
+                (fact "sends empty append-entries RPC to all servers"
+                      (become-leader raft) => anything
+                      (provided
+                        (core/send-rpc anything :append-entries [[] nil]) => ..raft.. :times 1))))
+
 
        (facts "about push"
-              (future-fact "sends next batch of entries to each server")
+              (let [raft (-> (core/create-raft good-append-rpc --store-- --state-machine-- ..server2.. [..server1.. ..server3..])
+                           (log/append-entries 0 [[..term.. ..command1..] [..term.. ..command2..]] nil nil nil)
+                           :raft
+                           become-leader
+                           (assoc-in [:servers ..server1.. :next-index] 0))]
+                (fact "sends next batch of entries to each server"
+                      (push raft) => anything
+                      (provided
+                        (core/send-rpc anything :append-entries {..server1.. [[[..term.. ..command1..] [..term.. ..command2..]] nil]
+                                                                 ..server3.. [[] nil]}) => anything :times 1)))
               (future-fact "sends empty append-entries RPC when no entries are pending")
               (future-fact "decrements next-index and retries if append-entries RPC fails due to inconsistency")
               (future-fact "marks entries as committed")

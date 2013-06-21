@@ -23,6 +23,55 @@
 (def last-term (comp :term last :log))
 
 
+; Calls the external RPC function and blocks on receiving a response.
+(defn- call-rpc [raft server command params]
+  @(apply (:rpc raft)
+          server
+          command
+          (:current-term raft)
+          (:this-server raft)
+          (last-index raft)
+          (last-term raft)
+          params))
+
+
+; Call the RPC on all servers, passing the provided parameters.
+; `params` should be either a list of parameters that are sent
+; to all servers, or should be a map from server identifier to
+; the list of parameters to send to each server.
+; If the timeout is provided, the operation will abort if it
+; takes longer than `timeout` milliseconds.
+(defn send-rpc
+  ([raft command params timeout callback]
+   (let [get-params (fn [server]
+                      (if (map? params)
+                        (get params server [])
+                        params))
+         rpc (fn [[server params]]
+               (call-rpc raft server command params))
+         requests (->> raft
+                    :servers
+                    keys
+                    ((juxt identity get-params))
+                    (map agent))]
+     (doseq [request requests]
+       (set-error-mode! request :contine)
+       (set-error-handler! request (fn [ag ex]
+                                     ; TODO logging?
+                                     (println "rpc failure"  ag ex)))
+       (send-off request rpc)
+       (when callback
+         (send-off request callback)))
+     (if timeout
+       (apply await-for timeout requests)
+       (apply await requests))))
+  ([raft command params callback]
+   (send-rpc raft command params nil callback))
+  ([raft command params]
+   (send-rpc raft command params nil nil)))
+
+
+
 ;
 ; create-raft
 ;
