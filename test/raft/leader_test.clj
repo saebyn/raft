@@ -88,12 +88,16 @@
                       (push raft) => anything
                       (provided
                         (core/send-rpc anything :append-entries {..server1.. [[] nil]
-                                                                 ..server3.. [[] nil]}) => [[..server1.. {:term 2 :success true}]
-                                                                                            [..server3.. {:term 2 :success false}]]
-                        (core/send-rpc anything :append-entries {..server3.. [[[2 ..command2..]] nil]}) => [[..server3.. {:term 2 :success true}]]))
+                                                                 ..server3.. [[] nil]}) => [[..server1.. {:term 0 :success true}]
+                                                                                            [..server3.. {:term 0 :success false}]]
+                        (core/send-rpc anything :append-entries {..server3.. [[[2 ..command2..]] nil]}) => [[..server3.. {:term 0 :success true}]]))
 
                 (future-fact "marks entries as committed")
 
                 (future-fact "applies newly commited entries to state machine")
 
-                (future-fact "becomes follower if append-entries RPC returns newer term"))))
+                (fact "becomes follower if append-entries RPC returns newer term"
+                      (push raft) => (contains {:leader-state :follower})
+                      (provided
+                        (core/send-rpc anything :append-entries {..server1.. [[] nil]
+                                                                 ..server3.. [[] nil]}) => [[..server1.. {:term 3 :success false}]])))))

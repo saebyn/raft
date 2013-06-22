@@ -89,17 +89,31 @@
     [server [next-entries (:commit-index raft)]]))
 
 
-(defn- handle-push-response [{raft :raft retries :retries}
+(defn- handle-push-response [sent-entries
+                             {raft :raft retries :retries stop :stop}
                              [server {term :term success :success}]]
-  ; TODO if follower sends back newer term, use it and become follower
-  ; TODO if succeeds, update next-index
   (cond
+    (true? stop) {:raft raft :retries []}
+
+    ; If follower sends back newer term, use it and become follower
+    (> term (:current-term raft)) {:raft (-> raft
+                                           (assoc :current-term term)
+                                           (assoc :leader-state :follower))
+                                   :retries []
+                                   :stop true}
+
     ; If fails, dec next-index and retry
     ;  we retry by building a new map of servers to entries, where
     ;  only the servers we want to retry are included.
     (false? success) {:raft (update-in raft [:servers server :next-index] dec)
                       :retries (conj retries server)}
-    :else {:raft raft :retries []}))
+
+    ; if succeeds, update next-index
+    :else
+      (let [sent-entry-count (count (first (sent-entries server)))]
+        {:raft (update-in raft [:servers server :next-index]
+                          (partial + sent-entry-count))
+           :retries retries})))
 
 
 (defn push-impl [raft]
@@ -109,7 +123,7 @@
                           (into {}))]
     (let [responses (send-rpc raft :append-entries pending-entries)
           {raft :raft retries :retries} (reduce
-                                          handle-push-response
+                                          (partial handle-push-response pending-entries)
                                           {:raft raft :retries []}
                                           responses)]
       (if (seq retries)
