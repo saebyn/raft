@@ -25,14 +25,14 @@
 
 ; Calls the external RPC function and blocks on receiving a response.
 (defn- call-rpc [raft server command params]
-  @(apply (:rpc raft)
-          server
-          command
-          (:current-term raft)
-          (:this-server raft)
-          (last-index raft)
-          (last-term raft)
-          params))
+  [server @(apply (:rpc raft)
+                  server
+                  command
+                  (:current-term raft)
+                  (:this-server raft)
+                  (last-index raft)
+                  (last-term raft)
+                  params)])
 
 
 ; Call the RPC on all servers, passing the provided parameters.
@@ -66,6 +66,7 @@
      (if timeout
        (apply await-for timeout requests)
        (apply await requests))
+     ; Deref's on agents don't block.
      (map (fn [r] (when-not (agent-error r) @r)) requests)))
   ([raft command params]
    (send-rpc raft command params nil)))

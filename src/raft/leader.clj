@@ -9,7 +9,8 @@
   (push [raft] "Pushed pending entries from the log to all followers."))
 
 
-(defn- vote-response-handler [current-term votes {term :term vote-granted :vote-granted}]
+(defn- vote-response-handler
+  [current-term votes [server {term :term vote-granted :vote-granted}]]
   ; Update current term to newest
   (swap! current-term max term)
   ; Add the vote, if granted
@@ -88,20 +89,37 @@
     [server [next-entries (:commit-index raft)]]))
 
 
+(defn- handle-push-response [{raft :raft retries :retries}
+                             [server {term :term success :success}]]
+  ; TODO if follower sends back newer term, use it and become follower
+  ; TODO if succeeds, update next-index
+  (cond
+    ; If fails, dec next-index and retry
+    ;  we retry by building a new map of servers to entries, where
+    ;  only the servers we want to retry are included.
+    (false? success) {:raft (update-in raft [:servers server :next-index] dec)
+                      :retries (conj retries server)}
+    :else {:raft raft :retries []}))
+
+
 (defn push-impl [raft]
-  (let [; decide which entries to send
-        pending-entries (->> raft
+  (loop [pending-entries (->> raft
                           :servers
                           (map (partial get-entries-to-send raft))
                           (into {}))]
-    ; send entries, wait for response
-    (send-rpc raft :append-entries pending-entries)
-    ; TODO if follower sends back newer term, use it and become follower
-    ; TODO if succeeds, update next-index
-    ; TODO if fails, dec next-index and retry
-    ;   we retry by building a new map of servers to entries, where
-    ;   only the servers we want to retry are included.
-    raft))
+    (let [responses (send-rpc raft :append-entries pending-entries)
+          {raft :raft retries :retries} (reduce
+                                          handle-push-response
+                                          {:raft raft :retries []}
+                                          responses)]
+      (if (seq retries)
+        (recur (->> retries
+                 (select-keys (:servers raft))
+                 (map (partial get-entries-to-send raft))
+                 (into {})))
+        raft))))
+
+
 
 
 (extend Raft
