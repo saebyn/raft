@@ -112,8 +112,42 @@
     :else
       (let [sent-entry-count (count (first (sent-entries server)))]
         {:raft (update-in raft [:servers server :next-index]
-                          (partial + sent-entry-count))
-           :retries retries})))
+                          (fnil + -1) sent-entry-count)
+         :retries retries})))
+
+
+(defn- get-majority-index [raft]
+  (let [; Add one to server count for this server.
+        server-count (inc (count (:servers raft)))
+        log-length (count (:log raft))
+        ; Get the current log entry index of all servers.
+        current-indicies (map
+                           (comp dec (partial min log-length) :next-index)
+                           (vals (:servers raft)))]
+    (loop [entry-index-freqs (into (sorted-map-by >) (frequencies current-indicies))]
+      (let [[index n] (first entry-index-freqs)
+            [next-index _] (second entry-index-freqs)]
+        (if-not (> n (/ server-count 2)) ; if no majority for this index
+          (recur (-> entry-index-freqs
+                   ; Merge this index's count into the following index.
+                   (update-in [next-index] + n)
+                   ; Remove this index.
+                   (dissoc index)))
+          index)))))
+
+
+(defn- is-majority-holding-current-term? [raft majority-index]
+  (assert (< majority-index (count (:log raft))))
+  (some #{(:current-term raft)}
+        (map :term (subvec (:log raft) 0 (inc majority-index)))))
+
+
+(defn- update-commit-index [raft]
+  (let [majority-index (get-majority-index raft)]
+    (if (and majority-index
+             (is-majority-holding-current-term? raft majority-index))
+      (assoc raft :commit-index majority-index)
+      raft)))
 
 
 (defn push-impl [raft]
@@ -135,9 +169,8 @@
 
 
 
-
 (extend Raft
   ILeader
   {:become-candidate (comp persist become-candidate-impl)
    :become-leader become-leader-impl
-   :push (comp persist push-impl)})
+   :push (comp persist update-commit-index push-impl)})

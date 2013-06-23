@@ -18,6 +18,7 @@
     raft))
 
 
+; Returns nil if log is empty.
 (def last-index (comp #(when-not (neg? %) %) dec count :log))
 
 (def last-term (comp :term last :log))
