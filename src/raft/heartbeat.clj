@@ -22,11 +22,10 @@
 (defn heartbeat [raft]
   (if (nil? (:election-timeout-remaining raft))
     (reset-election-timeout raft)
-    (if-not (or
-              (pos? (:election-timeout-remaining raft))
-              (= :leader (:leader-state raft)))
-      (leader/become-candidate raft)
-      raft)))
+    (cond
+      (= :leader (:leader-state raft)) (leader/push raft)
+      (pos? (:election-timeout-remaining raft)) raft
+      :else (leader/become-candidate raft))))
 
 
 (defn reset-election-timeout [raft]
