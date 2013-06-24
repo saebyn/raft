@@ -146,7 +146,7 @@
   (let [majority-index (get-majority-index raft)]
     (if (and majority-index
              (is-majority-holding-current-term? raft majority-index))
-      (assoc raft :commit-index majority-index)
+      (apply-commits raft majority-index)
       raft)))
 
 

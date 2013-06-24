@@ -4,6 +4,14 @@
             [raft.heartbeat :as heartbeat]
             [raft.core :as core]))
 
+(declare state-machine)
+
+(defn new-state-machine [command]
+  [nil state-machine])
+
+(defn state-machine [command]
+  [nil new-state-machine])
+
 
 (facts "about log"
        (let [raft (core/create-raft --rpc-- ..store.. ..state-machine.. ..server.. ..servers.. :election-timeout 2)]
@@ -63,15 +71,15 @@
                 (fact "applies newly committed entries to state machine"
                       ; This breaks if we use the raft constructed in the outer scope.
                       ; I don't know why.
-                      (let [raft (-> (core/create-raft --rpc-- ..store.. ..state-machine.. ..server.. ..servers.. :election-timeout 2)
+                      (let [raft (-> (core/create-raft --rpc-- --store-- state-machine ..server.. ..servers.. :election-timeout 2)
                                    (append-entries 1 [[..term1.. ..command1..]] nil nil nil)
                                    :raft)]
                         (append-entries raft 1 [[..term2.. ..command2..]] 0 ..term1.. 0)) => (contains {:success true
                                                                                                         :raft (contains
                                                                                                                 {:commit-index 0
-                                                                                                                 :state-machine ..new-state-machine..})})
+                                                                                                                 :state-machine new-state-machine})})
                       (provided
-                        (..state-machine.. ..command1..) => [..result.. ..new-state-machine..])))
+                        (state-machine ..command1..) => [..result.. new-state-machine])))
 
 
          (facts "about as-complete?"
