@@ -6,6 +6,7 @@
 
 (defprotocol IHeartbeat
   (reset-election-timeout [raft] "Resets the remaining time until an election starts.")
+  (decrease-election-timeout [raft amount] "Decreases the remaining time until an election starts.")
   (heartbeat [raft] "Beats the heart of the raft"))
 
 
@@ -36,4 +37,5 @@
 (extend Raft
   IHeartbeat
   {:heartbeat heartbeat
+   :decrease-election-timeout decrease-election-timeout
    :reset-election-timeout reset-election-timeout})
