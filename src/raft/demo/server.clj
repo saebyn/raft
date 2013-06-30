@@ -5,20 +5,40 @@
 (def raft-instance (atom nil))
 
 
-(defn run-server [api-ns]
-  ; 
-  ; So... we want to have a few threads going on
-  ;
-  ; we'll have an atom containing our raft
-  ; then we'll have a thread with the rpc server
-  ; then we'll have a thread with the heartbeat check + elapsed time
-  ; then we'll have a thread dumping stats on the raft on occasion
-  ; and maybe more later
-  ;
-  (slacker/start-slacker-server api-ns 2104)
+(defn- rpc-server [api-ns rpc-address rpc-port]
+  ; TODO only bind to the rpc-address
+  (println "RPC server started")
+  (future
+    (slacker/start-slacker-server api-ns rpc-port)))
+
+
+(defn- heartbeat-server []
+  (println "Heartbeat server started")
+  (future nil))
+
+
+(defn- stats-server []
+  (println "Stats server started")
+  (future nil))
+
+
+(defn run-server [api-ns rpc-address rpc-port]
+  ; TODO logging
+  (let [stopped (promise)
+        operations [(partial rpc-server api-ns rpc-address rpc-port)
+                    heartbeat-server
+                    stats-server]
+        operations (doall
+                     (map (fn [f]
+                            (future
+                              (deliver stopped (deref (f))))) operations))]
+    ; Wait until the first component stops, then quit.
+    @stopped
+    (println "Server stopping")
+    (System/exit 0))
   (comment
-  (let [start (System/currentTimeMillis)]
-     (-> raft
-       heartbeat
-       (decrease-election-timeout
-         (- start (System/currentTimeMillis)))))))
+    (let [start (System/currentTimeMillis)]
+      (-> raft
+        heartbeat
+        (decrease-election-timeout
+          (- start (System/currentTimeMillis)))))))
