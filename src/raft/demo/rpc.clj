@@ -1,4 +1,4 @@
-(ns raft.demo.api
+(ns raft.demo.rpc
   (:require [raft.demo.server :as server]
             [raft.log :as log]
             [raft.vote :as vote]))

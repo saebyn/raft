@@ -2,7 +2,7 @@
   (gen-class)
   (:use raft.core raft.heartbeat)
   (:require [raft.demo.server :as server]
-            [raft.demo.api :as local-api]
+            [raft.demo.rpc :as local-rpc]
             [slacker.client :as slacker]))
 
 
@@ -23,7 +23,7 @@
   (future
     (let [sc (slacker/slackerc server)]
       (slacker/defn-remote sc run-command
-        :remote-ns "raft.demo.api"
+        :remote-ns "raft.demo.rpc"
         :remote-name (name command)
         :async? true)
       (println "f")
@@ -45,6 +45,7 @@
   (let [this-server "localhost:2104"
         servers []
         timeout 150
+        broadcast-time 15
         store fake-storage
         raft (create-raft
                rpc store fake-state-machine
@@ -52,6 +53,6 @@
                :election-timeout timeout)
         rpc-address "localhost"
         rpc-port 2104
-        rpc-namespace (the-ns 'raft.demo.api)]
+        rpc-namespace (the-ns 'raft.demo.rpc)]
     (reset! server/raft-instance raft)
-    (server/run-server rpc-namespace rpc-address rpc-port)))
+    (server/run-server rpc-namespace rpc-address rpc-port broadcast-time)))
