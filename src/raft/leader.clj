@@ -155,7 +155,7 @@
                           :servers
                           (map (partial get-entries-to-send raft))
                           (into {}))]
-    (let [responses (send-rpc raft :append-entries pending-entries)
+    (let [responses (send-rpc raft :append-entries [pending-entries nil])
           {raft :raft retries :retries} (reduce
                                           (partial handle-push-response pending-entries)
                                           {:raft raft :retries []}

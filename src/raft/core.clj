@@ -1,4 +1,5 @@
 (ns raft.core
+  (:use clojure.tools.logging)
   (:use midje.open-protocols))
 
 
@@ -64,8 +65,7 @@
      (doseq [request requests]
        (set-error-mode! request :contine)
        (set-error-handler! request (fn [ag ex]
-                                     ; TODO logging?
-                                     (println "rpc failure"  ag ex)))
+                                     (error "rpc failure" ag ex)))
        (send-off request rpc))
      (if timeout
        (apply await-for timeout requests)

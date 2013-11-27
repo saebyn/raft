@@ -1,11 +1,28 @@
 (ns raft.demo.server
   (:use clojure.tools.logging)
   (:require [raft.heartbeat :refer [heartbeat decrease-election-timeout]]
+            [raft.log :refer [append-entries]]
+            [raft.vote :refer [request-vote]]
             [zeromq [zmq :as zmq]]
             [taoensso.nippy :as nippy]))
 
 
 (def raft-instance (atom nil))
+
+
+(defmulti rpc identity)
+
+(defmethod rpc :append-entries
+  [_ [term server last-index last-term [entries highest-committed-index]]]
+   (swap! raft-instance append-entries term entries highest-committed-index last-term last-index))
+
+(defmethod rpc :request-vote
+  [_ [candidate-term candidate-server last-log-index last-log-term []]]
+  (swap! raft-instance request-vote candidate-term candidate-server last-log-index last-log-term))
+
+
+(defmethod rpc :default [command args]
+  (warn "Unknown incoming RPC" command "with args" args))
 
 
 (defn- rpc-server [zmq-context this-server]
@@ -17,7 +34,7 @@
         (let [[command args] (nippy/thaw (zmq/receive-all responder))]
           (debug "Got RPC" command "with args" args "as" this-server)
           ; Return response
-          (zmq/send responder (nippy/freeze "world")))))
+          (zmq/send responder (nippy/freeze (rpc command args))))))
     (info "RPC server stopped")))
 
 

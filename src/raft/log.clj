@@ -55,9 +55,11 @@
   [raft term entries highest-committed-index last-term last-index]
   (let [current-term (:current-term raft)]
     (if (< term current-term)
+      ; Discard entries if the term is old.
       {:raft raft :term current-term :success false}
 
-      ; Since at this point the provided term is at least as up-to-date
+      ; Otherwise,
+      ; at this point the provided term is at least as up-to-date
       ; as the current term, we can always use the provided term instead.
       (let [raft (-> raft
                    (assoc :current-term term)

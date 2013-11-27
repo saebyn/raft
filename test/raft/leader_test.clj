@@ -84,40 +84,40 @@
                   (fact "sends next batch of entries to each server"
                         (push raft) => anything
                         (provided
-                          (core/send-rpc anything :append-entries {..server1.. [[[1 ..command1..] [2 .command2..]] nil]
-                                                                   ..server3.. [[] nil]}) => [] :times 1)))
+                          (core/send-rpc anything :append-entries [{..server1.. [[[1 ..command1..] [2 .command2..]] nil]
+                                                                    ..server3.. [[] nil]} nil]) => [] :times 1)))
 
                 (fact "sends empty append-entries RPC when no entries are pending"
                       (push raft) => anything
                       (provided
-                        (core/send-rpc anything :append-entries {..server1.. [[] nil]
-                                                                 ..server3.. [[] nil]}) => [] :times 1))
+                        (core/send-rpc anything :append-entries [{..server1.. [[] nil]
+                                                                  ..server3.. [[] nil]} nil]) => [] :times 1))
 
                 (fact "decrements next-index and retries if append-entries RPC fails due to inconsistency"
                       (push raft) => anything
                       (provided
-                        (core/send-rpc anything :append-entries {..server1.. [[] nil]
-                                                                 ..server3.. [[] nil]}) => [[..server1.. {:term 1 :success true}]
+                        (core/send-rpc anything :append-entries [{..server1.. [[] nil]
+                                                                  ..server3.. [[] nil]} nil]) => [[..server1.. {:term 1 :success true}]
                                                                                             [..server3.. {:term 1 :success false}]]
-                        (core/send-rpc anything :append-entries {..server3.. [[[2 ..command2..]] nil]}) => [[..server3.. {:term 0 :success true}]]))
+                        (core/send-rpc anything :append-entries [{..server3.. [[[2 ..command2..]] nil]} nil]) => [[..server3.. {:term 0 :success true}]]))
 
                 (fact "marks entries as committed"
                       (push raft) => (contains {:commit-index 1})
                       (provided
-                        (core/send-rpc anything :append-entries {..server1.. [[] nil]
-                                                                 ..server3.. [[] nil]}) => [[..server1.. {:term 1 :success true}]
+                        (core/send-rpc anything :append-entries [{..server1.. [[] nil]
+                                                                  ..server3.. [[] nil]} nil]) => [[..server1.. {:term 1 :success true}]
                                                                                             [..server3.. {:term 1 :success true}]]))
 
                 (fact "applies newly commited entries to state machine"
                       (push raft) => anything
                       (provided
                         (second-state-machine ..command2..) => [nil state-machine] :times 1
-                        (core/send-rpc anything :append-entries {..server1.. [[] nil]
-                                                                 ..server3.. [[] nil]}) => [[..server1.. {:term 1 :success true}]
+                        (core/send-rpc anything :append-entries [{..server1.. [[] nil]
+                                                                  ..server3.. [[] nil]} nil]) => [[..server1.. {:term 1 :success true}]
                                                                                             [..server3.. {:term 1 :success true}]]))
 
                 (fact "becomes follower if append-entries RPC returns newer term"
                       (push raft) => (contains {:leader-state :follower})
                       (provided
-                        (core/send-rpc anything :append-entries {..server1.. [[] nil]
-                                                                 ..server3.. [[] nil]}) => [[..server1.. {:term 3 :success false}]])))))
+                        (core/send-rpc anything :append-entries [{..server1.. [[] nil]
+                                                                  ..server3.. [[] nil]} nil]) => [[..server1.. {:term 3 :success false}]])))))
