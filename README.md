@@ -8,9 +8,29 @@ See [In Search of an Understandable Consensus Algorithm](https://ramcloud.stanfo
 This is a work in progress.
 
 
+## TODO
+
+Implement configuration change mechanism and verify demo functionality.
+
+Also, see docs/intro.md for some additional notes.
+
+
 ## Usage
 
-FIXME
+Requires [Leiningen](https://github.com/technomancy/leiningen).
+
+
+The demo can be run with:
+
+    $ lein run
+
+
+See some information about command-line arguments:
+
+
+    $ lein run -- --help
+
+
 
 ## License
 

@@ -1,31 +1,36 @@
 (ns raft.demo.server
-  (:use raft.heartbeat)
-  (:require [slacker.server :as slacker]))
+  (:use clojure.tools.logging)
+  (:require [raft.heartbeat :refer [heartbeat decrease-election-timeout]]
+            [zeromq [zmq :as zmq]]
+            [taoensso.nippy :as nippy]))
 
 
 (def raft-instance (atom nil))
 
 
-(defn- rpc-server [rpc-ns rpc-address rpc-port]
-  ; TODO only bind to the rpc-address
-  (println "RPC server started")
+(defn- rpc-server [zmq-context this-server]
+  (info "RPC server started")
   (future
-    ; ugh, apparently, this puts itself into a thread and doesn't
-    ; give us a handle for it :(
-    (println (slacker/start-slacker-server rpc-ns rpc-port))
-    (println "RPC server stopped")))
+    (with-open [responder (doto (zmq/socket zmq-context :rep)
+                            (zmq/bind this-server))]
+      (while true
+        (let [[command args] (nippy/thaw (zmq/receive-all responder))]
+          (debug "Got RPC" command "with args" args "as" this-server)
+          ; Return response
+          (zmq/send responder (nippy/freeze "world")))))
+    (info "RPC server stopped")))
 
 
-(defn- external-service-server []
-  (println "External service server started")
+(defn- external-service-server [this-external-server]
+  (info "External service server started")
   (future
-    ; TODO
-    (Thread/sleep 1000000)
-    (println "External service server stopped")))
+    ; TODO just sleep for a while so that we don't stop early.
+    (Thread/sleep 10000000000000)
+    (info "External service server stopped")))
 
 
 (defn- heartbeat-server [broadcast-time]
-  (println "Heartbeat server started")
+  (info "Heartbeat server started")
   (let [timeout (:election-timeout @raft-instance)]
     (future
       (loop []
@@ -37,29 +42,31 @@
                       (- start (System/currentTimeMillis)))))
           (Thread/sleep (- broadcast-time (- start (System/currentTimeMillis)))))
         (recur))
-      (println "Heartbeat server stopped"))))
+      (info "Heartbeat server stopped"))))
 
 
 (defn- stats-server []
-  (println "Stats server started")
+  (info "Stats server started")
   (future
-    ; TODO
-    (Thread/sleep 100000)
-    (println "Stats server stopped")))
+    (while true
+      ; Just dump the contents of the raft state every 5 seconds for now
+      (debug "Raft instance:" @raft-instance)
+      (Thread/sleep 5000))
+    (info "Stats server stopped")))
 
 
-(defn run-server [rpc-ns rpc-address rpc-port broadcast-time]
+(defn run-server [zmq-context this-server this-external-server broadcast-time]
   ; TODO logging
   (let [stopped (promise)
-        operations [(partial rpc-server rpc-ns rpc-address rpc-port)
-                    external-service-server
-                    (partial heartbeat-server broadcast-time)
-                    stats-server]
-        operations (doall
-                     (map (fn [f]
-                            (future
-                              (deliver stopped (deref (f))))) operations))]
+        ; The servers to operate
+        operations {:rpc (rpc-server zmq-context this-server)
+                    :external (external-service-server this-external-server)
+                    :heartbeat (heartbeat-server broadcast-time)
+                    :stats (stats-server)}]
+    (doseq [[name op] operations]
+      (future
+        (deliver stopped [name (deref op)])))
     ; Wait until the first component stops, then quit.
-    @stopped
-    (println "Server stopping")
+    (debug "Exiting component returned" @stopped)
+    (info "Server stopping")
     (System/exit 0)))

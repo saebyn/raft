@@ -24,8 +24,10 @@
 (def last-term (comp :term last :log))
 
 
-; Calls the external RPC function and blocks on receiving a response.
-(defn- call-rpc [raft server command params]
+; An internal wrapper around the RPC function we're given.
+(defn- call-rpc
+  "Calls the external RPC function and blocks on receiving a response."
+  [raft server command params]
   [server @(apply (:rpc raft)
                   server
                   command
@@ -45,6 +47,7 @@
 ; If the timeout is provided, the operation will abort if it
 ; takes longer than `timeout` milliseconds.
 (defn send-rpc
+  "Send a remote procedure call to all servers."
   ([raft command params timeout]
    (let [get-params (fn [server]
                       (if (map? params)
@@ -95,7 +98,7 @@
 ; create-raft
 ;
 ; `rpc` should be a function (fn [server rpc-name & args] (future result))
-; where server is an opaque entry from the servers sequence.
+; where server is an opaque entry from the servers sequence (or this-server).
 ;
 ; `store` should be a function (fn ([key value] nil) ([key] value))
 ; that persists the keys and their associated values to a non-volatile
