@@ -1,4 +1,5 @@
 (ns raft.heartbeat
+  (:use clojure.tools.logging)
   (:use raft.core)
   (:require [raft.leader :as leader])
   (:import [raft.core Raft]))
@@ -21,15 +22,19 @@
 
 
 (defn heartbeat [raft]
+  (debug "Entering heartbeat")
   (if (nil? (:election-timeout-remaining raft))
     (reset-election-timeout raft)
     (cond
       (= :leader (:leader-state raft)) (leader/push raft)
       (pos? (:election-timeout-remaining raft)) raft
-      :else (leader/become-candidate raft))))
+      ; Candidates need the election timeout reset. Do it here to avoid
+      ; circular deps.
+      :else (leader/become-candidate (reset-election-timeout raft)))))
 
 
 (defn reset-election-timeout [raft]
+  (debug "Resetting election timeout")
   (assoc raft
          :election-timeout-remaining (generate-timeout (:election-timeout raft))))
 

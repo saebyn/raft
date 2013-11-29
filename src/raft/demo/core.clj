@@ -42,14 +42,13 @@
 (defn- rpc
   "Make an remote procedure call to a raft server node."
   [server command & args]
-  (debug "Sending RPC" command "to" server "with args" args)
   (future
     ; TODO XXX this is very basic/naive
     ; needs:
     ;  timeout/abort/reset socket on failure
     ;  some number of retries
-    (zmq/send (@connections server) (nippy/freeze command args))
-    (nippy/thaw (zmq/receive-all))))
+    (zmq/send (@connections server) (nippy/freeze [command args]))
+    (nippy/thaw (zmq/receive (@connections server)))))
 
 
 

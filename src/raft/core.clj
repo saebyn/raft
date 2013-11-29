@@ -50,6 +50,7 @@
 (defn send-rpc
   "Send a remote procedure call to all servers."
   ([raft command params timeout]
+   (debug "Sending RPC" command "with parameters" params "and timeout" timeout)
    (let [get-params (fn [server]
                       (if (map? params)
                         (get params server nil)
@@ -59,19 +60,21 @@
          requests (->> raft
                     :servers
                     keys
-                    ((juxt identity get-params))
-                    (remove #(nil? (second %)))
-                    (map agent))]
-     (doseq [request requests]
+                    (map (juxt identity get-params))
+                    (remove #(nil? (second %))))
+         requests-agents (map agent requests)]
+     (doseq [request requests-agents]
        (set-error-mode! request :contine)
        (set-error-handler! request (fn [ag ex]
                                      (error "rpc failure" ag ex)))
        (send-off request rpc))
      (if timeout
-       (apply await-for timeout requests)
-       (apply await requests))
+       (apply await-for timeout requests-agents)
+       (apply await requests-agents))
+
+     (debug "Assembling responses for RPC")
      ; Deref's on agents don't block.
-     (map (fn [r] (when-not (agent-error r) @r)) requests)))
+     (map (fn [r] (when-not (agent-error r) @r)) requests-agents)))
   ([raft command params]
    (send-rpc raft command params nil)))
 

@@ -10,19 +10,29 @@
 (def raft-instance (atom nil))
 
 
-(defmulti rpc identity)
+(defmulti rpc (fn [x & rest] x))
+
+; TODO create something like swap!, but that deals with
+; functions that return a value that needs to be split by
+; another function (e.g. extracting the raft), swapping in
+; that into the atom, and then returning the other side of the
+; split.
 
 (defmethod rpc :append-entries
-  [_ [term server last-index last-term [entries highest-committed-index]]]
-   (swap! raft-instance append-entries term entries highest-committed-index last-term last-index))
+  [command term server last-index last-term entries highest-committed-index]
+  (let [{raft :raft term :term success :success} (append-entries @raft-instance term entries highest-committed-index last-term last-index)]
+    (reset! raft-instance raft)
+    {:term term :success success}))
 
 (defmethod rpc :request-vote
-  [_ [candidate-term candidate-server last-log-index last-log-term []]]
-  (swap! raft-instance request-vote candidate-term candidate-server last-log-index last-log-term))
+  [command candidate-term candidate-server last-log-index last-log-term]
+  (let [{raft :raft term :term vote-granted :vote-granted} (request-vote @raft-instance candidate-term candidate-server last-log-index last-log-term)]
+    (reset! raft-instance raft)
+    {:term term :vote-granted vote-granted}))
 
 
-(defmethod rpc :default [command args]
-  (warn "Unknown incoming RPC" command "with args" args))
+(defmethod rpc :default [& args]
+  (error "Unknown incoming RPC" args))
 
 
 (defn- rpc-server [zmq-context this-server]
@@ -31,10 +41,10 @@
     (with-open [responder (doto (zmq/socket zmq-context :rep)
                             (zmq/bind this-server))]
       (while true
-        (let [[command args] (nippy/thaw (zmq/receive-all responder))]
+        (let [bytes (zmq/receive responder)
+              [command args] (nippy/thaw bytes)]
           (debug "Got RPC" command "with args" args "as" this-server)
-          ; Return response
-          (zmq/send responder (nippy/freeze (rpc command args))))))
+          (zmq/send responder (nippy/freeze (apply rpc command args))))))
     (info "RPC server stopped")))
 
 
@@ -50,15 +60,18 @@
   (info "Heartbeat server started")
   (let [timeout (:election-timeout @raft-instance)]
     (future
-      (loop []
-        (let [start (System/currentTimeMillis)]
-          (swap! raft-instance
-                 #(-> %
-                  heartbeat
-                    (decrease-election-timeout
-                      (- start (System/currentTimeMillis)))))
-          (Thread/sleep (- broadcast-time (- start (System/currentTimeMillis)))))
-        (recur))
+      (loop [start (System/currentTimeMillis)]
+        (let [current (System/currentTimeMillis)]
+          (when (> current start)
+            ; Here (- current start) is the number of milliseconds we took in
+            ; the last iteration, which should be at least broadcast-time ms.
+            (swap! raft-instance
+                   #(-> %
+                    heartbeat
+                      (decrease-election-timeout
+                        (- current start)))))
+          (Thread/sleep (/ (- broadcast-time (- current start)) 1000))
+          (recur current)))
       (info "Heartbeat server stopped"))))
 
 

@@ -1,4 +1,5 @@
 (ns raft.leader
+  (:use clojure.tools.logging)
   (:use raft.core)
   (:import [raft.core Raft]))
 
@@ -11,6 +12,8 @@
 
 (defn- vote-response-handler
   [current-term votes [server {term :term vote-granted :vote-granted}]]
+
+  (debug "Got vote response from" server "term:" term "vote granted:" vote-granted)
   ; Update current term to newest
   (swap! current-term max term)
   ; Add the vote, if granted
@@ -19,6 +22,7 @@
 
 
 (defn become-candidate-impl [raft]
+  (debug "Entering become candidate")
   (let [raft (-> raft
                (update-in [:current-term] inc)
                (assoc :leader-state :candidate))
@@ -31,12 +35,14 @@
 
         server-count (inc (count (:servers raft)))]
 
-    ; Dispatch out the RPC to each request agent
-    ; Block for all agents to finish the RPC operation, but only until
-    ; the election timeout expires.
+    (debug "Current term:" initial-term "total nodes:" server-count)
+
+    ; Dispatch out the RPC to all nodes
+    ; Block only until the election timeout expires.
     ; Notice that while we use the election timeout, we don't subtract from
     ; it. This lets us reuse it in the next heartbeat, if we don't become
     ; the leader.
+
     ; TODO Ideally, we would interrupt the block if/when we get a majority
     ; of the votes, or a majority becomes impossible.
     ; - could use a promise, where the handler checks for majority and resolves
@@ -49,6 +55,8 @@
                   []
                   (:election-timeout-remaining raft))))
 
+    (debug "Highest term seen as candidate:" @current-term)
+    (debug "Votes for this candidate:" @votes)
     (if (> @current-term initial-term)
       ; Return to being a follower because another server has a more recent
       ; term.
@@ -65,6 +73,7 @@
 
 
 (defn become-leader-impl [raft]
+  (debug "Entering become leader")
   (let [next-index (inc (or (last-index raft) -1))
         rpc-params  [[] (:commit-index raft)]
 

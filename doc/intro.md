@@ -25,3 +25,14 @@ The 'demo.core namespace contains our -main function. It (TODO) parses command-l
 creates the raft state, puts the raft state into the 'demo.server.raft-instance atom, and
 starts up the server via 'demo.server.run-server.
 
+
+## Demo cli parameters
+
+broadcastTime ≪ electionTimeout ≪ MTBF
+
+
+TODO explain how to start a cluster of demo instances
+
+TODO explain how to add additional instances to an existing cluster
+
+TODO document how to build an app using the raft-clj library

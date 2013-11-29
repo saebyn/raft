@@ -7,12 +7,22 @@ See [In Search of an Understandable Consensus Algorithm](https://ramcloud.stanfo
 
 This is a work in progress.
 
+See doc/intro.md for some additional notes.
+
 
 ## TODO
 
-Implement configuration change mechanism and verify demo functionality.
+- Debug leader election problems
 
-Also, see docs/intro.md for some additional notes.
+- For demo
+
+  - If servers are provided, begin an election on start. Otherwise, stay as follower and wait for configuration change to add the node.
+
+  - Add cluster config commands (add/remove nodes)
+
+- Implement configuration change mechanism
+
+- More/better documentation
 
 
 ## Usage
