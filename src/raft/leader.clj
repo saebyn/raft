@@ -13,7 +13,8 @@
 (defn- vote-response-handler
   [current-term votes [server {term :term vote-granted :vote-granted}]]
 
-  (debug "Got vote response from" server "term:" term "vote granted:" vote-granted)
+  (debug
+    "Got vote response from" server "term:" term "vote granted:" vote-granted)
   ; Update current term to newest
   (swap! current-term max term)
   ; Add the vote, if granted
@@ -83,7 +84,9 @@
                           #(into {}
                                  (map (fn [[server details]]
                                         [server
-                                         (assoc details :next-index next-index)]) %))))]
+                                         (assoc details
+                                                :next-index
+                                                next-index)]) %))))]
 
     (send-rpc raft :append-entries rpc-params)
     raft))
@@ -133,7 +136,8 @@
         current-indicies (map
                            (comp dec (partial min log-length) :next-index)
                            (vals (:servers raft)))]
-    (loop [entry-index-freqs (into (sorted-map-by >) (frequencies current-indicies))]
+    (loop [entry-index-freqs (into (sorted-map-by >)
+                                   (frequencies current-indicies))]
       (let [[index n] (first entry-index-freqs)
             [next-index _] (second entry-index-freqs)]
         (if-not (> n (/ server-count 2)) ; if no majority for this index
@@ -166,7 +170,9 @@
                           (into {}))]
     (let [responses (send-rpc raft :append-entries [pending-entries nil])
           {raft :raft retries :retries} (reduce
-                                          (partial handle-push-response pending-entries)
+                                          (partial
+                                            handle-push-response
+                                            pending-entries)
                                           {:raft raft :retries []}
                                           responses)]
       (if (seq retries)

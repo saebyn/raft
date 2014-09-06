@@ -84,11 +84,14 @@
   (let [commit-index (or (:commit-index raft) -1)
         raft (assoc raft :commit-index new-commit-index)]
     (assert (> (count (:log raft)) commit-index))
-    (assert (or (nil? new-commit-index) (> (count (:log raft)) new-commit-index)))
+    (assert
+      (or (nil? new-commit-index) (> (count (:log raft)) new-commit-index)))
     (assert (or (nil? new-commit-index) (>= new-commit-index commit-index)))
     (if-not (nil? new-commit-index)
       (loop [state-machine (:state-machine raft)
-             entries (subvec (:log raft) (inc commit-index) (inc new-commit-index))]
+             entries (subvec (:log raft)
+                             (inc commit-index)
+                             (inc new-commit-index))]
         (assert (not (nil? state-machine)))
         (if (seq entries)
           (recur (second (state-machine (:command (first entries))))
@@ -127,8 +130,9 @@
 ;
 ;
 (defn create-raft
-  [rpc store state-machine this-server servers & {:keys [election-timeout election-term]
-                                                  :or {election-timeout 150 election-term 0}}]
+  [rpc store state-machine this-server servers &
+   {:keys [election-timeout election-term]
+    :or {election-timeout 150 election-term 0}}]
   (Raft. rpc store
          (or (store :log) [])
          (or (store :current-term) election-term)

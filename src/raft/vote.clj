@@ -6,7 +6,9 @@
 
 
 (defprotocol IVote
-  (request-vote [raft candidate-term candidate-server last-log-index last-log-term] "Requests that this raft votes for the candidate"))
+  (request-vote
+    [raft candidate-term candidate-server last-log-index last-log-term]
+    "Requests that this raft votes for the candidate"))
 
 
 (defn- update-term-if-newer

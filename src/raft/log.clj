@@ -7,8 +7,13 @@
 (defrecord Entry [term command])
 
 (defprotocol ILog
-  (append-entries [raft term entries highest-committed-index last-term last-index] "Appends the entries to the raft's log")
-  (as-complete? [raft last-term last-index] "Returns non-nil if the term and index indicate a log at least as complete as the raft's log"))
+  (append-entries
+    [raft term entries highest-committed-index last-term last-index]
+    "Appends the entries to the raft's log")
+  (as-complete?
+    [raft last-term last-index]
+    "Returns non-nil if the term and index indicate a log at least as complete
+     as the raft's log"))
 
 
 (defn- entry-exists? [raft term index]
