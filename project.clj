@@ -6,8 +6,9 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/tools.logging "0.2.6"]]
   :main raft.demo.core
-  :profiles {:dev {:dependencies [[midje "1.5.1"]
-                                  [lein-midje "3.0.0"]
+  :profiles {:dev {:plugins [[lein-midje "3.1.3"]]
+                   :dependencies [[midje "1.6.3"]
+                                  [lein-midje "3.1.3"]
                                   [org.clojure/tools.cli "0.2.4"]
                                   [clj-logging-config "1.9.10"]
                                   [com.taoensso/nippy "2.5.0"]
