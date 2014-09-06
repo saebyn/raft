@@ -5,7 +5,12 @@ A Clojure library that implements the Raft consensus algorithm.
 See [In Search of an Understandable Consensus Algorithm](https://ramcloud.stanford.edu/wiki/download/attachments/11370504/raft.pdf) by Diego Ongaro and John Ousterhout for more information.
 
 
-This is a work in progress.
+*This is a work in progress.*
+
+
+*It doesn't work yet.* I'm happy to review pull requests and I am likely to accept
+those with passing tests and that [have some style](https://github.com/bbatsov/clojure-style-guide).
+
 
 See doc/intro.md for some additional notes.
 
@@ -30,15 +35,20 @@ See doc/intro.md for some additional notes.
 Requires [Leiningen](https://github.com/technomancy/leiningen).
 
 
-The demo can be run with:
+You can run the demo with Leiningen:
 
     $ lein run
 
 
-See some information about command-line arguments:
+You can see some information about command-line arguments:
 
 
     $ lein run -- --help
+
+
+You can run the test suite using Leiningen:
+
+    $ lein midje
 
 
 
