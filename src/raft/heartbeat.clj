@@ -25,9 +25,12 @@
   (+ base-timeout (rand-int base-timeout)))
 
 
+(defn- election-timed-out? [raft]
+  (nil? (:election-timeout-remaining raft)))
+
 (defn heartbeat [raft]
   (debug "Entering heartbeat")
-  (if (nil? (:election-timeout-remaining raft))
+  (if (election-timed-out? raft)
     (reset-election-timeout raft)
     (cond
       (= :leader (:leader-state raft)) (leader/push raft)

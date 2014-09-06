@@ -32,14 +32,14 @@
                             (assoc :election-timeout-remaining 0))]
                (heartbeat raft) => anything
                (provided
-                (leader/become-candidate raft) => anything))
+                (leader/become-candidate (reset-election-timeout raft)) => anything))
 
              (let [raft (create-raft
                           --rpc-- --store-- --state-machine--
                           ..server2.. [..server3..] :election-timeout 10)]
                (heartbeat raft) => anything
                (provided
-                (leader/become-candidate raft) => anything :times 0)))
+                 (leader/become-candidate raft) => anything :times 0)))
 
        (fact "pushes append-entries RPC to followers if leader"
              (let [raft (-> (create-raft
