@@ -1,6 +1,8 @@
 (ns raft.demo.core
   (gen-class)
-  (:use clojure.tools.logging clj-logging-config.log4j)
+  ; Use midje.sweet to prevent complaints about use of defrecord-openly
+  ; in raft.core.
+  (:use midje.sweet clojure.tools.logging clj-logging-config.log4j)
   (:require [raft.demo.server :refer [raft-instance run-server]]
             [raft.core :refer [create-raft]]
             [zeromq [zmq :as zmq]]
@@ -9,6 +11,7 @@
 
 
 (set-logger!)
+(alter-var-root #'include-midje-checks (constantly false))
 
 
 (def connections (atom {}))
