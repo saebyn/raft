@@ -7,6 +7,7 @@ See [In Search of an Understandable Consensus Algorithm](https://ramcloud.stanfo
 
 *This is a work in progress.*
 
+[![Build Status](https://travis-ci.org/saebyn/raft.svg?branch=master)](https://travis-ci.org/saebyn/raft)
 
 *It doesn't work yet.* I'm happy to review pull requests and I am likely to accept
 those with passing tests and that [have some style](https://github.com/bbatsov/clojure-style-guide).
