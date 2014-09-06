@@ -2,7 +2,7 @@
 
 A Clojure library that implements the Raft consensus algorithm.
 
-See [In Search of an Understandable Consensus Algorithm](https://ramcloud.stanford.edu/wiki/download/attachments/11370504/raft.pdf) by Diego Ongaro and John Ousterhout for more information.
+See [In Search of an Understandable Consensus Algorithm](https://ramcloud.stanford.edu/wiki/download/attachments/11370504/raft.pdf) [PDF] by Diego Ongaro and John Ousterhout for more information.
 
 
 *This is a work in progress.*
@@ -55,6 +55,6 @@ You can run the test suite using Leiningen:
 
 ## License
 
-Copyright © 2013 John Weaver
+Copyright © 2013-2014 John Weaver
 
 Distributed under the Eclipse Public License, the same as Clojure.
