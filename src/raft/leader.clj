@@ -136,27 +136,35 @@
     (map next-index-fn (vals (:servers raft)))))
 
 
+(defn- is-majority? [raft n]
+  ; Add one to servers count to account for this server.
+  (let [server-count (-> raft
+                         :servers
+                         count
+                         int)]
+    (> n (/ server-count 2))))
+
+
 (defn- get-majority-index [raft]
-  (let [; Add one to servers count to account for this server.
-        server-count (inc (count (:servers raft)))]
-    ; Maintain a sorted frequency map of entry indices, which
-    ; we alter to find the majority index.
-    (loop [entry-index-freqs (into (sorted-map-by >)
-                                   (frequencies (server-log-indices raft)))]
+  ; Maintain a sorted frequency map of entry indices, which
+  ; we alter to find the majority index.
+  (loop [entry-index-freqs (into (sorted-map-by >)
+                                 (frequencies (server-log-indices raft)))]
+    ; Can't do anything if there are no entry indices.
+    (when (seq entry-index-freqs)
       (let [[index n] (first entry-index-freqs)
             [next-index _] (second entry-index-freqs)]
         ; `n` is the number of occurances of the most-frequent index `index`
         ; `next-index` is the second-most-frequent index
-        (if-not (> n (/ server-count 2)) ; if no majority for this index
-          (if next-index
+        (if-not (is-majority? raft n)
+          ; If no majority for this index and there are other indices...
+          (when next-index
             ; Merge this index's count into the following index, and remove
             ; `index`.
             (recur (-> entry-index-freqs
                      (update-in [next-index] + n)
                      ; Remove this index.
-                     (dissoc index)))
-            ; No further indices to unwind.
-            nil)
+                     (dissoc index))))
           index)))))
 
 
@@ -179,7 +187,6 @@
                           :servers
                           (map (partial get-entries-to-send raft))
                           (into {}))]
-    (debug "Leader push impl start")
     (let [responses (send-rpc raft :append-entries pending-entries)
           {raft :raft retries :retries} (reduce
                                           (partial
