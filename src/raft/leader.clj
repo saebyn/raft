@@ -15,10 +15,11 @@
 
   (debug
     "Got vote response from" server "term:" term "vote granted:" vote-granted)
-  ; Update current term to newest
-  (swap! current-term max term)
-  ; Add the vote, if granted
+  (when term
+    ; Update current term to newest
+    (swap! current-term max term))
   (when vote-granted
+    ; Add the vote, if granted
     (swap! votes inc)))
 
 
@@ -27,7 +28,7 @@
   (let [raft (-> raft
                (update-in [:current-term] inc)
                (assoc :leader-state :candidate))
-        initial-term (:current-term raft)
+        initial-term (or (:current-term raft) -1)
 
         ; Votes for our election, include a vote for ourself.
         votes (atom 1)
@@ -128,24 +129,34 @@
          :retries retries})))
 
 
+(defn- server-log-indices [raft]
+  "Get the current log entry index of all servers."
+  (let [log-length (count (:log raft))
+        next-index-fn (comp dec (partial min log-length) :next-index)]
+    (map next-index-fn (vals (:servers raft)))))
+
+
 (defn- get-majority-index [raft]
-  (let [; Add one to server count for this server.
-        server-count (inc (count (:servers raft)))
-        log-length (count (:log raft))
-        ; Get the current log entry index of all servers.
-        current-indicies (map
-                           (comp dec (partial min log-length) :next-index)
-                           (vals (:servers raft)))]
+  (let [; Add one to servers count to account for this server.
+        server-count (inc (count (:servers raft)))]
+    ; Maintain a sorted frequency map of entry indices, which
+    ; we alter to find the majority index.
     (loop [entry-index-freqs (into (sorted-map-by >)
-                                   (frequencies current-indicies))]
+                                   (frequencies (server-log-indices raft)))]
       (let [[index n] (first entry-index-freqs)
             [next-index _] (second entry-index-freqs)]
+        ; `n` is the number of occurances of the most-frequent index `index`
+        ; `next-index` is the second-most-frequent index
         (if-not (> n (/ server-count 2)) ; if no majority for this index
-          (recur (-> entry-index-freqs
-                   ; Merge this index's count into the following index.
-                   (update-in [next-index] + n)
-                   ; Remove this index.
-                   (dissoc index)))
+          (if next-index
+            ; Merge this index's count into the following index, and remove
+            ; `index`.
+            (recur (-> entry-index-freqs
+                     (update-in [next-index] + n)
+                     ; Remove this index.
+                     (dissoc index)))
+            ; No further indices to unwind.
+            nil)
           index)))))
 
 
@@ -168,13 +179,15 @@
                           :servers
                           (map (partial get-entries-to-send raft))
                           (into {}))]
-    (let [responses (send-rpc raft :append-entries [pending-entries nil])
+    (debug "Leader push impl start")
+    (let [responses (send-rpc raft :append-entries pending-entries)
           {raft :raft retries :retries} (reduce
                                           (partial
                                             handle-push-response
                                             pending-entries)
                                           {:raft raft :retries []}
                                           responses)]
+      (debug "Leader push processed responses with" (count retries) "retries")
       (if (seq retries)
         (recur (->> retries
                  (select-keys (:servers raft))

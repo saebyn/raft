@@ -18,11 +18,13 @@ See doc/intro.md for some additional notes.
 
 ## TODO
 
-- Debug leader election problems
+- Fix "Java.lang.IllegalStateException: Cannot send another request" error
+
+  - See src/raft/demo/core.clj line 52 for details
 
 - For demo
 
-  - If servers are provided, begin an election on start. Otherwise, stay as follower and wait for configuration change to add the node.
+  - Add send command command
 
   - Add cluster config commands (add/remove nodes)
 
@@ -38,7 +40,20 @@ Requires [Leiningen](https://github.com/technomancy/leiningen).
 
 You can run the demo with Leiningen:
 
-    $ lein run
+    $ lein run start
+
+
+You can run the demo with multiple nodes:
+
+    $ lein run -- start -A tcp://localhost:2104 -X tcp://localhost:2105 tcp://localhost:2106 tcp://localhost:2108
+    $ lein run -- start -A tcp://localhost:2106 -X tcp://localhost:2107 tcp://localhost:2104 tcp://localhost:2108
+    $ lein run -- start -A tcp://localhost:2108 -X tcp://localhost:2109 tcp://localhost:2104 tcp://localhost:2106
+
+
+(Coming soon)
+You can send a command to a node:
+
+    $ lein run -- send tcp://localhost:2105 my_command
 
 
 You can see some information about command-line arguments:

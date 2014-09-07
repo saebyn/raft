@@ -10,6 +10,7 @@
 (def raft-instance (atom nil))
 
 
+; Dispatch incoming RPCs via this.
 (defmulti rpc (fn [x & rest] x))
 
 ; TODO create something like swap!, but that deals with
@@ -51,7 +52,10 @@
 (defn- external-service-server [this-external-server]
   (info "External service server started")
   (future
-    ; TODO just sleep for a while so that we don't stop early.
+    ; just sleep for a while so that we don't stop early.
+    ; TODO implement me by taking incoming messages,
+    ; appending to raft log, if we're the leader.
+    ; otherwise, tell the client who the leader is
     (Thread/sleep 10000000000000)
     (info "External service server stopped")))
 
@@ -61,16 +65,29 @@
   (let [timeout (:election-timeout @raft-instance)]
     (future
       (loop [start (System/currentTimeMillis)]
-        (let [current (System/currentTimeMillis)]
+        (let [current (System/currentTimeMillis)
+              elapsed (- current start)
+              remaining (- broadcast-time elapsed)]
+          (debug "Heartbeat"
+            {:start start
+             :current current
+             :diff elapsed
+             :broadcast-time broadcast-time
+             :remaining remaining})
           (when (> current start)
             ; Here (- current start) is the number of milliseconds we took in
             ; the last iteration, which should be at least broadcast-time ms.
             (swap! raft-instance
                    #(-> %
-                    heartbeat
-                      (decrease-election-timeout
-                        (- current start)))))
-          (Thread/sleep (/ (- broadcast-time (- current start)) 1000))
+                        heartbeat
+                        (decrease-election-timeout
+                          (- current start))))
+            (debug "Back from heartbeat impl"))
+
+          (when (pos? remaining)
+            (debug "sleeping for" (/ remaining 2) "ms")
+            (Thread/sleep (/ remaining 2))
+            (debug "Heartbeat back from sleep"))
           (recur current)))
       (info "Heartbeat server stopped"))))
 
@@ -80,13 +97,14 @@
   (future
     (while true
       ; Just dump the contents of the raft state every 5 seconds for now
+      ; TODO send stats somewhere?
       (debug "Raft instance:" @raft-instance)
       (Thread/sleep 5000))
     (info "Stats server stopped")))
 
 
 (defn run-server [zmq-context this-server this-external-server broadcast-time]
-  ; TODO logging
+  ; TODO stats server optional?
   (let [stopped (promise)
         ; The servers to operate
         operations {:rpc (rpc-server zmq-context this-server)

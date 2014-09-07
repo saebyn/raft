@@ -15,7 +15,8 @@
 
 
 (defn decrease-election-timeout [raft amount]
-  (update-in raft [:election-timeout-remaining] #(- % amount)))
+  (debug "decreasing election timeout" raft amount)
+  (update-in raft [:election-timeout-remaining] #(max 0 ( - % amount))))
 
 
 (defn- generate-timeout
@@ -25,19 +26,30 @@
   (+ base-timeout (rand-int base-timeout)))
 
 
-(defn- election-timed-out? [raft]
+(defn- election-timer-unset? [raft]
   (nil? (:election-timeout-remaining raft)))
 
 (defn heartbeat [raft]
   (debug "Entering heartbeat")
-  (if (election-timed-out? raft)
+  (if (election-timer-unset? raft)
     (reset-election-timeout raft)
     (cond
-      (= :leader (:leader-state raft)) (leader/push raft)
-      (pos? (:election-timeout-remaining raft)) raft
+      (= :leader (:leader-state raft))
+      (do
+        (debug "Heartbeat pushing as leader")
+        (let [raft (leader/push raft)]
+          (debug "got raft back from leader push" raft)
+          raft))
+      (pos? (:election-timeout-remaining raft))
+      (do
+        (debug "Heartbeat doing nothing")
+        raft)
       ; Candidates need the election timeout reset. Do it here to avoid
       ; circular deps.
-      :else (leader/become-candidate (reset-election-timeout raft)))))
+      :else
+      (do
+        (debug "Heartbeat becoming candidate")
+        (leader/become-candidate (reset-election-timeout raft))))))
 
 
 (defn reset-election-timeout [raft]

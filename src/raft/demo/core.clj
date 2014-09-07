@@ -4,19 +4,21 @@
   ; in raft.core.
   (:use midje.sweet clojure.tools.logging clj-logging-config.log4j)
   (:require [raft.demo.server :refer [raft-instance run-server]]
+            [clojure.string :as string]
             [raft.core :refer [create-raft]]
             [zeromq [zmq :as zmq]]
             [taoensso.nippy :as nippy]
-            [clojure.tools.cli :refer [cli]]))
+            [clojure.tools.cli :refer [parse-opts]]))
 
 
-(set-logger!)
+(set-logger! :level :debug)
 (alter-var-root #'include-midje-checks (constantly false))
 
 
 (def connections (atom {}))
 
 
+; TODO better error handling when nonsense gets here
 (defn- connect-server
   "Connect to server using ZeroMQ"
   [zmq-context server]
@@ -25,6 +27,7 @@
 
 
 ; TODO implement an actual storage mechanism
+; cupboard?
 (defn- fake-storage
   "Dummy storage function."
   ([k]
@@ -46,32 +49,98 @@
   "Make an remote procedure call to a raft server node."
   [server command & args]
   (future
+    ; FIXME something in the code calls this, but then doesn't wait for a
+    ; response before calling this again on the same server, resulting
+    ; an attempt to send multiple times before receiving the response to
+    ; the first send. This causes RPC failures.
     ; TODO XXX this is very basic/naive
     ; needs:
     ;  timeout/abort/reset socket on failure
     ;  some number of retries
-    (zmq/send (@connections server) (nippy/freeze [command args]))
-    (nippy/thaw (zmq/receive (@connections server)))))
+    (let [conn (@connections server)]
+      (debug "sending RPC via zmq to" server)
+      (zmq/send conn (nippy/freeze [command args]))
+      (let [resp (nippy/thaw (zmq/receive conn))]
+        (debug "got RPC response via zmq from" server)
+        resp))))
 
 
+; TODO will need DB setup params for storage mechanism
+(def ^:private start-raft-options
+  [["-h" "--help" "Show this help"
+    :default false :flag true]
+   ["-A" "--server-address ADDR" "Endpoint to listen for incoming Raft RPC"
+    :default "tcp://localhost:2104"]
+   ["-X" "--api-address ADDR" "Endpoint to listen for external API requests"
+    :default "tcp://localhost:2105"]
+   ["-e" "--election-timeout N" "Minimum election timeout, in milliseconds"
+    :default "150"]
+   ["-b" "--broadcast-time N" "Time between heartbeat messages, in milliseconds"
+    :default "15"]])
 
-(defn -main
-  "Raft demo server."
-  [& args]
-  (info "Starting raft demo application")
-  ; TODO will need DB setup params for storage mechanism
-  (let [[options args banner] (cli args "Usage: <command> [args] [list of other raft servers (e.g. tcp://example.com:2104)]"
-                                   ["-h" "--help" "Show this help" :default false :flag true]
-                                   ["-A" "--server-address" "Endpoint to listen for incoming Raft RPC" :default "tcp://localhost:2104"]
-                                   ["-X" "--api-address" "Endpoint to listen for external API requests" :default "tcp://localhost:2105"]
-                                   ["-e" "--election-timeout" "Minimum election timeout, in milliseconds" :default "150"]
-                                   ["-b" "--broadcast-time" "Time between heartbeat messages, in milliseconds" :default "15"])]
-    (when (:help options)
-      (println banner)
-      (System/exit 0))
+
+(def ^:private send-command-options
+  [])
+
+
+(def ^:private main-options
+  [])
+
+
+(defn- start-raft-usage [summary]
+  (str "Usage: program-name start [options]"
+       " <list of other raft servers (e.g. tcp://example.com:2104)>"
+       "
+       
+       Options:
+       \n" summary "
+       "))
+
+
+(defn- send-command-usage [summary]
+  (str "Usage: program-name send [options]"
+       " <raft server (e.g. tcp://example.com:2104)>"
+       " <message>
+       
+       Options:
+       \n" summary "
+       "))
+
+
+(defn- main-usage [summary]
+  (str "Usage: program-name [options] command [command options]
+       
+        Options:
+        \n" summary "
+       
+        Commands:
+
+          start    Start raft node
+          send     Send command to a raft node
+       "))
+
+
+(defn error-msg [errors]
+  (str "The following errors occurred while parsing your command:\n\n"
+       (string/join \newline errors)))
+
+
+(defn exit  [status msg]
+  (println msg)
+  (System/exit status))
+
+
+(defn- start-raft [main-options args]
+  "Start a raft instance."
+  (let [{:keys [options arguments errors summary]} (parse-opts args start-raft-options)]
+    ;; Handle help and error conditions
+    (cond
+      (:help options) (exit 0 (start-raft-usage summary))
+      errors (exit 1 (error-msg errors)))
+
     (let [this-server (:server-address options)
           this-external-server (:api-address options)
-          servers args
+          servers arguments
           timeout (Integer/parseInt (:election-timeout options))
           broadcast-time (Integer/parseInt (:broadcast-time options))
           zmq-context (zmq/context)
@@ -79,7 +148,38 @@
                 rpc fake-storage fake-state-machine
                 this-server servers
                 :election-timeout timeout)
-          server-connections (into {} (map (partial connect-server zmq-context) servers))]
-      (reset! raft-instance raft)
-      (reset! connections server-connections)
-      (run-server zmq-context this-server this-external-server broadcast-time))))
+          server-connections (into {}
+                                   (map (partial connect-server zmq-context)
+                                        servers))]
+    (reset! raft-instance raft)
+    (reset! connections server-connections)
+    (run-server zmq-context this-server this-external-server broadcast-time))))
+
+
+(defn- send-command [main-options args]
+  "Send a command to a raft instance."
+  (let [{:keys [options arguments errors summary]} (parse-opts args send-command-options)]
+  ;; Handle help and error conditions
+  (cond
+    (:help options) (exit 0 (send-command-usage summary))
+    (not= (count arguments) 2) (exit 1 (send-command-usage summary))
+    errors (exit 1 (error-msg errors)))
+
+  (println "TODO" main-options args options)))
+
+
+(defn -main
+  "Raft demo server."
+  [& args]
+  (let [{:keys [options arguments errors summary]} (parse-opts args main-options :in-order true)]
+    ;; Handle help and error conditions
+    (cond
+      (:help options) (exit 0 (main-usage summary))
+      (< (count arguments) 1) (exit 1 (main-usage summary))
+      errors (exit 1 (error-msg errors)))
+
+    ;; Execute program with options
+    (case (first arguments)
+      "start" (start-raft options (rest arguments))
+      "send" (send-command options (rest arguments))
+      (exit 1 (main-usage summary)))))

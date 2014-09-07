@@ -47,11 +47,13 @@
 ; server will not be sent an RPC.
 ; If the timeout is provided, the operation will abort if it
 ; takes longer than `timeout` milliseconds.
+; TODO just split this into two functions
 (defn send-rpc
   "Send a remote procedure call to all servers."
   ([raft command params timeout]
    (debug "Sending RPC" command "with parameters" params "and timeout" timeout)
    (let [get-params (fn [server]
+                      (debug "getting server params for server" server "from params" params)
                       (if (map? params)
                         (get params server nil)
                         params))
@@ -64,7 +66,7 @@
                     (remove #(nil? (second %))))
          requests-agents (map agent requests)]
      (doseq [request requests-agents]
-       (set-error-mode! request :contine)
+       (set-error-mode! request :continue)
        (set-error-handler! request (fn [ag ex]
                                      (error "rpc failure" ag ex)))
        (send-off request rpc))
@@ -81,6 +83,7 @@
 
 (defn apply-commits
   [raft new-commit-index]
+  (debug "apply-commits" new-commit-index)
   (let [commit-index (or (:commit-index raft) -1)
         raft (assoc raft :commit-index new-commit-index)]
     (assert (> (count (:log raft)) commit-index))
