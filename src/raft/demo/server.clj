@@ -13,23 +13,37 @@
 ; Dispatch incoming RPCs via this.
 (defmulti rpc (fn [x & rest] x))
 
-; TODO create something like swap!, but that deals with
-; functions that return a value that needs to be split by
-; another function (e.g. extracting the raft), swapping in
-; that into the atom, and then returning the other side of the
-; split.
+
+(defn- swap-extract!
+  "Like swap!, but takes another function `e` that extracts an inner value
+   from the result of applying `f` to the contents of `a` and `args` and
+   causes swap! to use that inner value to set the atom `a`.
+   
+   Returns the `extra` returned by `e`."
+  [^clojure.lang.Atom a e f & args]
+  (let [extra-atom (atom nil)]
+    (apply swap! a (fn [& inner-args]
+                     (let [[inside extra] (e (apply f inner-args))]
+		       (reset! extra-atom extra)
+                       inside)))
+    @extra-atom))
+  
 
 (defmethod rpc :append-entries
   [command term server last-index last-term entries highest-committed-index]
-  (let [{raft :raft term :term success :success} (append-entries @raft-instance term entries highest-committed-index last-term last-index)]
-    (reset! raft-instance raft)
-    {:term term :success success}))
+  (let [extract (fn [{raft :raft term :term success :success}]
+                  [raft {:term term :success success}])]
+    (swap-extract! raft-instance extract append-entries
+                   term entries highest-committed-index last-term last-index)))
+
 
 (defmethod rpc :request-vote
   [command candidate-term candidate-server last-log-index last-log-term]
-  (let [{raft :raft term :term vote-granted :vote-granted} (request-vote @raft-instance candidate-term candidate-server last-log-index last-log-term)]
-    (reset! raft-instance raft)
-    {:term term :vote-granted vote-granted}))
+  (let [extract (fn [{raft :raft term :term vote-granted :vote-granted}]
+                  [raft {:term term :vote-granted vote-granted}])]
+    (swap-extract! raft-instance extract request-vote
+                   candidate-term candidate-server
+		   last-log-index last-log-term)))
 
 
 (defmethod rpc :default [& args]
