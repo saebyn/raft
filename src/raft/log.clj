@@ -1,10 +1,8 @@
 (ns raft.log
   (:use raft.core)
   (:require [raft.heartbeat :as heartbeat])
-  (:import [raft.core Raft]))
+  (:import [raft.core Raft Entry]))
 
-
-(defrecord Entry [term command])
 
 (defprotocol ILog
   (append-entries
@@ -24,7 +22,7 @@
 
 
 (defn- make-entry [[term command]]
-  (Entry. term command))
+  (Entry. term command nil))
 
 
 (defn- add-entries [raft entries]

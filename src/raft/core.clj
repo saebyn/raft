@@ -1,11 +1,14 @@
 (ns raft.core
-  (:use clojure.tools.logging)
-  (:use midje.open-protocols))
+  (:require [clojure.tools.logging :as l]
+            [clojure.core.async :refer [put!]]
+            [midje.open-protocols :refer [defrecord-openly]]))
 
 
 (defprotocol IPersist
   (persist [raft] "Persists the essential state of the raft"))
 
+
+(defrecord Entry [term command maybe-execution-chan])
 
 (defrecord-openly Raft [rpc store log current-term this-server servers
                         election-timeout state-machine leader-state voted-for
@@ -51,9 +54,9 @@
 (defn send-rpc
   "Send a remote procedure call to all servers."
   ([raft command params timeout]
-   (debug "Sending RPC" command "with parameters" params "and timeout" timeout)
+   (l/debug "Sending RPC" command "with parameters" params "and timeout" timeout)
    (let [get-params (fn [server]
-                      (debug "getting server params for server" server "from params" params)
+                      (l/debug "getting server params for server" server "from params" params)
                       (if (map? params)
                         (get params server nil)
                         params))
@@ -68,13 +71,13 @@
      (doseq [request requests-agents]
        (set-error-mode! request :continue)
        (set-error-handler! request (fn [ag ex]
-                                     (error "rpc failure" ag ex)))
+                                     (l/error "rpc failure" ag ex)))
        (send-off request rpc))
      (if timeout
        (apply await-for timeout requests-agents)
        (apply await requests-agents))
 
-     (debug "Assembling responses for RPC")
+     (l/debug "Assembling responses for RPC")
      ; Deref's on agents don't block.
      (map (fn [r] (when-not (agent-error r) @r)) requests-agents)))
   ([raft command params]
@@ -83,7 +86,7 @@
 
 (defn apply-commits
   [raft new-commit-index]
-  (debug "apply-commits" new-commit-index)
+  (l/debug "apply-commits" new-commit-index)
   (let [commit-index (or (:commit-index raft) -1)
         raft (assoc raft :commit-index new-commit-index)]
     (assert (> (count (:log raft)) commit-index))
@@ -97,9 +100,14 @@
                              (inc new-commit-index))]
         (assert (not (nil? state-machine)))
         (if (seq entries)
-          (recur (second (state-machine (:command (first entries))))
-                 (rest entries))
-          raft))
+          (let [[{command :command
+                  exec-chan :maybe-execution-chan
+                  :as entry} & entries] entries
+                [value new-state-machine] (state-machine command)]
+            (when exec-chan
+              (put! exec-chan {:value value}))
+            (recur new-state-machine entries))
+          (assoc raft :state-machine state-machine)))
       raft)))
 
 

@@ -1,7 +1,7 @@
 (ns raft.leader
   (:use clojure.tools.logging)
   (:use raft.core)
-  (:import [raft.core Raft]))
+  (:import [raft.core Raft Entry]))
 
 
 (defprotocol ILeader
