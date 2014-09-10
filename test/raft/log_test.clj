@@ -24,8 +24,9 @@
                       (contains
                         {:success true
                          :raft (contains
-                                 {:log (just [{:term ..term..
-                                               :command ..command..}])})}))
+                                 {:log (just [(contains
+                                                {:term ..term..
+                                                 :command ..command..})])})}))
                 (fact "adds a second entry if the previous entry exists"
                       (let [raft (-> raft 
                                    (append-entries 1 [[..term1.. ..command1..]]
@@ -36,11 +37,13 @@
                                         nil ..term1.. 0) =>
                         (contains
                           {:success true
-                           :raft (contains
-                                   {:log (just [{:term ..term1..
-                                                 :command ..command1..}
-                                                {:term ..term2..
-                                                 :command ..command2..}])})})))
+                           :raft
+                           (contains
+                             {:log (just
+                                     [(contains {:term ..term1..
+                                                 :command ..command1..})
+                                      (contains {:term ..term2..
+                                                 :command ..command2..})])})})))
                 (fact "does nothing if the last index and term isn't present in
                        the log"
                       (append-entries raft 1
@@ -116,7 +119,9 @@
                                          [3 ..commandn2..]] nil 1 0) =>
                         (contains
                           {:success true
-                           :raft (contains {:log (just expected-log)})})))
+                           :raft (contains
+                                   {:log (just
+                                           (map contains expected-log))})})))
 
                 (fact "applies newly committed entries to state machine"
                       ; This breaks if we use the raft constructed in the outer
