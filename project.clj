@@ -11,8 +11,8 @@
                                   [lein-midje "3.1.3"]
                                   [org.clojure/core.async "0.1.338.0-5c5012-alpha"]
                                   [org.clojure/tools.cli "0.3.1"]
-                                  [clj-logging-config "1.9.10"]
-                                  [com.taoensso/nippy "2.5.0"]
-                                  [org.zeromq/jeromq "0.3.1"]
-                                  [org.zeromq/cljzmq "0.1.3" :exclusions [org.zeromq/jzmq]]
+                                  [clj-logging-config "1.9.12"]
+                                  [com.taoensso/nippy "2.6.3"]
+                                  [org.zeromq/jeromq "0.3.4"]
+                                  [org.zeromq/cljzmq "0.1.4" :exclusions [org.zeromq/jzmq]]
                                   [cupboard "1.0beta1"]]}})
