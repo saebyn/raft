@@ -14,5 +14,4 @@
                                   [clj-logging-config "1.9.12"]
                                   [com.taoensso/nippy "2.6.3"]
                                   [org.zeromq/jeromq "0.3.4"]
-                                  [org.zeromq/cljzmq "0.1.4" :exclusions [org.zeromq/jzmq]]
-                                  [cupboard "1.0beta1"]]}})
+                                  [org.zeromq/cljzmq "0.1.4" :exclusions [org.zeromq/jzmq]]]}})
