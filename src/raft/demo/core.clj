@@ -3,10 +3,14 @@
   ; Use midje.sweet to prevent complaints about use of defrecord-openly
   ; in raft.core.
   (:use midje.sweet clj-logging-config.log4j)
+  (:import  [java.io PushbackReader Reader Writer])
   (:require [raft.demo.server :refer [raft-instance run-server]]
+            [clojure.java.io :as io]
+            [clojure.tools.logging :as l]
+            [clojure.edn :as edn]
             [clojure.string :as string]
             [clojure.tools.logging :as l]
-            [clojure.core.async :refer [thread]]
+            [clojure.core.async :refer [thread go-loop >!! <!! >! alts! chan]]
             [raft.core :refer [create-raft]]
             [zeromq [zmq :as zmq]]
             [taoensso.nippy :as nippy]
@@ -28,16 +32,44 @@
             (zmq/connect server))])
 
 
-; TODO implement an actual storage mechanism
-; cupboard?
-(defn- fake-storage
-  "Dummy storage function."
-  ([k]
-   (l/debug "Fetching key" k "from storage")
-   nil)
-  ([k v]
-   (l/debug "Setting key" k "to storage")
-   nil))
+(defn- read-all-storage [path]
+  (try
+    (with-open [reader (io/reader path)]
+      (edn/read {:eof {}} (PushbackReader. reader)))
+
+    (catch Exception e
+      (l/warn "Failed to read from storage.")
+      {})))
+
+
+(defn- read-storage [path k]
+  (get (read-all-storage path) k))
+
+
+(defn- write-storage [path k v]
+  (let [data (read-all-storage path)]
+    (with-open [writer (io/writer path)]
+      (.write writer (str (assoc data k v))))
+    nil))
+
+
+(defn- storage [path]
+  (let [read-ch (chan)
+        write-ch (chan)]
+    (go-loop []
+      (let [[v ch] (alts! [read-ch write-ch])]
+        (condp = ch
+          read-ch (>! read-ch {:value (apply read-storage path v)})
+          write-ch (apply write-storage path v))
+        (recur)))
+    (fn
+      ([k]
+       (l/debug "Fetching key" k "from storage")
+       (>!! read-ch [k])
+       (:value (<!! read-ch)))
+      ([k v]
+       (l/debug "Putting key" k "into storage")
+       (>!! write-ch [k v])))))
 
 
 (defn- fake-state-machine
@@ -64,10 +96,11 @@
         resp))))
 
 
-; TODO will need DB setup params for storage mechanism
 (def ^:private start-raft-options
   [["-h" "--help" "Show this help"
     :default false :flag true]
+   ["-f" "--persist-file PATH"
+    "File path to persist voting, term, and log data to"]
    ["-A" "--server-address ADDR" "Endpoint to listen for incoming Raft RPC"
     :default "tcp://localhost:2104"]
    ["-X" "--api-address ADDR" "Endpoint to listen for external API requests"
@@ -144,35 +177,41 @@
           timeout (Integer/parseInt (:election-timeout options))
           broadcast-time (Integer/parseInt (:broadcast-time options))
           zmq-context (zmq/context)
+          persist-file (or (:persist-file options)
+                           (java.io.File/createTempFile "raft" ".db"))
           raft (create-raft
-                rpc fake-storage fake-state-machine
+                rpc (storage persist-file) fake-state-machine
                 this-server servers
                 :election-timeout timeout)
           server-connections (into {}
                                    (map (partial connect-server zmq-context)
                                         servers))]
-    (reset! raft-instance raft)
-    (reset! connections server-connections)
-    (run-server zmq-context this-server this-external-server broadcast-time))))
+      (l/info "Persisting data to" persist-file)
+      (reset! raft-instance raft)
+      (reset! connections server-connections)
+      (run-server
+        zmq-context this-server this-external-server broadcast-time))))
 
 
 (defn- send-command
   "Send a command to a raft instance."
   [main-options args]
-  (let [{:keys [options arguments errors summary]} (parse-opts args send-command-options)]
-  ;; Handle help and error conditions
-  (cond
-    (:help options) (exit 0 (send-command-usage summary))
-    (not= (count arguments) 2) (exit 1 (send-command-usage summary))
-    errors (exit 1 (error-msg errors)))
-
-  (println "TODO" main-options args options)))
+  (let [{:keys [options arguments errors summary]}
+        (parse-opts args send-command-options)]
+    ;; Handle help and error conditions
+    (cond
+      (:help options) (exit 0 (send-command-usage summary))
+      (not= (count arguments) 2) (exit 1 (send-command-usage summary))
+      errors (exit 1 (error-msg errors)))
+  
+    (println "TODO" main-options args options)))
 
 
 (defn -main
   "Raft demo server."
   [& args]
-  (let [{:keys [options arguments errors summary]} (parse-opts args main-options :in-order true)]
+  (let [{:keys [options arguments errors summary]}
+        (parse-opts args main-options :in-order true)]
     ;; Handle help and error conditions
     (cond
       (:help options) (exit 0 (main-usage summary))
