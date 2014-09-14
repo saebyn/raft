@@ -3,7 +3,7 @@
             [raft.log :refer [append-entries]]
             [raft.vote :refer [request-vote]]
             [clojure.tools.logging :as l]
-            [clojure.core.async :refer [go-loop alts!!]]
+            [clojure.core.async :refer [go-loop alts!! go]]
             [zeromq [zmq :as zmq]]
             [taoensso.nippy :as nippy]))
 
@@ -26,7 +26,7 @@
     (apply swap! a (fn [& inner-args]
                      (let [[inside extra] (e (apply f inner-args))]
 		       (reset! extra-atom extra)
-                       inside)))
+                       inside)) args)
     @extra-atom))
   
 
@@ -53,14 +53,15 @@
 
 (defn- rpc-server [zmq-context this-server]
   (l/info "RPC server started")
-  (with-open [responder (doto (zmq/socket zmq-context :rep)
-                            (zmq/bind this-server))]
-      (go-loop []
+  (go 
+    (with-open [responder (doto (zmq/socket zmq-context :rep)
+                              (zmq/bind this-server))]
+      (loop []
         (let [bytes (zmq/receive responder)
               [command args] (nippy/thaw bytes)]
           (l/debug "Got RPC" command "with args" args "as" this-server)
           (zmq/send responder (nippy/freeze (apply rpc command args))))
-        (recur))))
+        (recur)))))
 
 
 (defn- external-service-server [this-external-server]
@@ -70,7 +71,6 @@
     ; TODO implement me by taking incoming messages,
     ; appending to raft log, if we're the leader.
     ; otherwise, tell the client who the leader is
-    (Thread/sleep 10000000000000)
     (recur)))
 
 
@@ -111,18 +111,20 @@
       ; Just dump the contents of the raft state every 5 seconds for now
       ; TODO send stats somewhere?
       (l/debug "Raft instance:" @raft-instance)
-      (Thread/sleep 5000)))
+      (recur)))
 
 
 (defn run-server [zmq-context this-server this-external-server broadcast-time]
   ; TODO stats server optional?
   (l/debug
     "Exiting component returned"
-    (alts!!
-      [(rpc-server zmq-context this-server)
-       (external-service-server this-external-server)
-       (heartbeat-server broadcast-time)
-       (stats-server)]))
+    (first 
+      (alts!!
+        [(rpc-server zmq-context this-server)
+         ;(external-service-server this-external-server)
+         (heartbeat-server broadcast-time)
+         ;(stats-server)
+         ])))
 
   (l/info "Server stopped")
   (System/exit 0))

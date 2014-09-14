@@ -18,17 +18,13 @@ See doc/intro.md for some additional notes.
 
 ## TODO
 
-- Fix "Java.lang.IllegalStateException: Cannot send another request" error
-
-  - See src/raft/demo/core.clj line 52 for details
-
 - For demo
 
   - Add send command command
 
   - Add cluster config commands (add/remove nodes)
 
-- Implement configuration change mechanism
+- Implement configuration change mechanism (major missing capability)
 
 - More/better documentation
 
