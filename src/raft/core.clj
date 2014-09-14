@@ -1,6 +1,6 @@
 (ns raft.core
   (:require [clojure.tools.logging :as l]
-            [clojure.core.async :refer [put!]]
+            [clojure.core.async :refer [put! map< alts!! <!!] :as async]
             [midje.open-protocols :refer [defrecord-openly]]))
 
 
@@ -28,60 +28,59 @@
 (def last-term (comp :term last :log))
 
 
-; An internal wrapper around the RPC function we're given.
 (defn- call-rpc
-  "Calls the external RPC function and blocks on receiving a response."
-  [raft server command params]
-  [server @(apply (:rpc raft)
-                  server
-                  command
-                  (:current-term raft)
-                  (:this-server raft)
-                  (last-index raft)
-                  (last-term raft)
-                  params)])
+  [{rpc :rpc
+    current-term :current-term
+    this-server :this-server
+    :as raft} command [server params]]
+  (map< #(vector server %)
+    (apply rpc
+           server command current-term this-server
+           (last-index raft)
+           (last-term raft)
+           params)))
 
 
-; Call the RPC on all servers, passing the provided parameters.
-; `params` should be either a list of parameters that are sent
-; to all servers, or should be a map from server identifier to
-; the list of parameters to send to each server.
-; If `params` is a map and a server is ommitted from it, the
-; server will not be sent an RPC.
-; If the timeout is provided, the operation will abort if it
-; takes longer than `timeout` milliseconds.
-; TODO just split this into two functions
+(defn- call-rpcs [raft command server-params]
+  (->> server-params
+       ; make a seq of channels with responses
+       (map (partial call-rpc raft command))
+       ; make a channel with all responses
+       async/merge
+       ; make a channel with a map of server to their response
+       (async/reduce conj {})))
+
+
 (defn send-rpc
-  "Send a remote procedure call to all servers."
-  ([raft command params timeout]
-   (l/debug "Sending RPC" command "with parameters" params "and timeout" timeout)
-   (let [get-params (fn [server]
-                      (l/debug "getting server params for server" server "from params" params)
-                      (if (map? params)
-                        (get params server nil)
-                        params))
-         rpc (fn [[server params]]
-               (call-rpc raft server command params))
-         requests (->> raft
-                    :servers
-                    keys
-                    (map (juxt identity get-params))
-                    (remove #(nil? (second %))))
-         requests-agents (map agent requests)]
-     (doseq [request requests-agents]
-       (set-error-mode! request :continue)
-       (set-error-handler! request (fn [ag ex]
-                                     (l/error "rpc failure" ag ex)))
-       (send-off request rpc))
-     (if timeout
-       (apply await-for timeout requests-agents)
-       (apply await requests-agents))
+  "Send a remote procedure call to the selected servers."
+  ([raft command server-params timeout]
+    (l/debug
+      "Sending RPC" command
+      "with parameters" server-params
+      "and timeout" timeout)
+    ; TODO add some handling/logging for things timing out
+    (if timeout
+      (or 
+        (first 
+          (alts!! [(call-rpcs raft command server-params)
+                   (async/timeout timeout)]))
+        {})
+      (<!! (call-rpcs raft command server-params))))
+  ([raft command server-params]
+   (send-rpc raft command server-params nil)))
 
-     (l/debug "Assembling responses for RPC")
-     ; Deref's on agents don't block.
-     (map (fn [r] (when-not (agent-error r) @r)) requests-agents)))
+
+(defn send-rpc-to-all
+  "Send a remote procedure call with the same parameters to all servers."
+  ([raft command params timeout]
+    (send-rpc raft command
+      (->> raft
+          :servers
+          keys
+          (map (juxt identity (fn [_] params))))
+      timeout))
   ([raft command params]
-   (send-rpc raft command params nil)))
+   (send-rpc-to-all raft command params nil)))
 
 
 (defn apply-commits
@@ -114,7 +113,7 @@
 ;
 ; create-raft
 ;
-; `rpc` should be a function (fn [server rpc-name & args] (future result))
+; `rpc` should be a function (fn [server rpc-name & args] (thread result))
 ; where server is an opaque entry from the servers sequence (or this-server).
 ;
 ; `store` should be a function (fn ([key value] nil) ([key] value))

@@ -3,16 +3,17 @@
   (:require [raft.core :as core]
             [raft.log :as log]
             [raft.heartbeat :as heartbeat]
-            [raft.leader :refer :all]))
+            [raft.leader :refer :all]
+            [clojure.core.async :refer [go]]))
 
 
 (defn gen-vote-rpc [return-term grants-vote]
   (fn [& rest]
-    (future {:term return-term :vote-granted grants-vote :test true})))
+    (go {:term return-term :vote-granted grants-vote :test true})))
 
 (defn gen-append-rpc [return-term return-success]
   (fn [& rest]
-    (future {:term return-term :success return-success :test true})))
+    (go {:term return-term :success return-success :test true})))
 
 (defn good-append-rpc [& rest]
   (apply (gen-append-rpc 0 true) rest))
@@ -93,7 +94,7 @@
                 (fact "sends empty append-entries RPC to all servers"
                       (become-leader raft) => anything
                       (provided
-                        (core/send-rpc anything :append-entries [[] nil]) =>
+                        (core/send-rpc-to-all anything :append-entries [[] nil]) =>
                         [] :times 1))))
 
 
