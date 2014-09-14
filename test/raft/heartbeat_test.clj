@@ -2,14 +2,15 @@
   (:use midje.sweet)
   (:require [raft.heartbeat :refer :all]
             [raft.core :refer :all]
-            [raft.leader :as leader]))
+            [raft.leader :as leader]
+            [clojure.core.async :refer [go]]))
 
 
 (facts "about heartbeat"
        (prerequisite
          (--rpc--
            anything anything ..term.. anything anything anything) =>
-         (future {:vote-granted false :term ..term..}))
+         (go {:vote-granted false :term ..term..}))
 
        (fact "resets election timeout if it hasn't been set"
              (let [raft (create-raft

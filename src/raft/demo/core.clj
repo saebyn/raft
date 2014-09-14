@@ -2,9 +2,11 @@
   (gen-class)
   ; Use midje.sweet to prevent complaints about use of defrecord-openly
   ; in raft.core.
-  (:use midje.sweet clojure.tools.logging clj-logging-config.log4j)
+  (:use midje.sweet clj-logging-config.log4j)
   (:require [raft.demo.server :refer [raft-instance run-server]]
             [clojure.string :as string]
+            [clojure.tools.logging :as l]
+            [clojure.core.async :refer [thread]]
             [raft.core :refer [create-raft]]
             [zeromq [zmq :as zmq]]
             [taoensso.nippy :as nippy]
@@ -31,37 +33,34 @@
 (defn- fake-storage
   "Dummy storage function."
   ([k]
-   (debug "Fetching key" k "from storage")
+   (l/debug "Fetching key" k "from storage")
    nil)
   ([k v]
-   (debug "Setting key" k "to storage")
+   (l/debug "Setting key" k "to storage")
    nil))
 
 
 (defn- fake-state-machine
   "Dummy state machine."
   [command]
-  (debug "Got FSM input" command)
+  (l/debug "Got FSM input" command)
   [nil fake-state-machine])
 
 
 (defn- rpc
-  "Make an remote procedure call to a raft server node."
+  "Make an remote procedure call to a raft server node.
+   Returns a channel that receives the result."
   [server command & args]
-  (future
-    ; FIXME something in the code calls this, but then doesn't wait for a
-    ; response before calling this again on the same server, resulting
-    ; an attempt to send multiple times before receiving the response to
-    ; the first send. This causes RPC failures.
+  (thread
     ; TODO XXX this is very basic/naive
     ; needs:
     ;  timeout/abort/reset socket on failure
     ;  some number of retries
     (let [conn (@connections server)]
-      (debug "sending RPC via zmq to" server)
+      (l/debug "sending RPC via zmq to" server)
       (zmq/send conn (nippy/freeze [command args]))
       (let [resp (nippy/thaw (zmq/receive conn))]
-        (debug "got RPC response via zmq from" server)
+        (l/debug "got RPC response via zmq from" server)
         resp))))
 
 

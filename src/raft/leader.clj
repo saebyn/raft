@@ -1,7 +1,7 @@
 (ns raft.leader
   (:use clojure.tools.logging)
   (:use raft.core)
-  (:import [raft.core Raft]))
+  (:import [raft.core Raft Entry]))
 
 
 (defprotocol ILeader
@@ -52,7 +52,7 @@
     (dorun
       (map
         (partial vote-response-handler current-term votes)
-        (send-rpc raft
+        (send-rpc-to-all raft
                   :request-vote
                   []
                   (:election-timeout-remaining raft))))
@@ -89,7 +89,7 @@
                                                 :next-index
                                                 next-index)]) %))))]
 
-    (send-rpc raft :append-entries rpc-params)
+    (send-rpc-to-all raft :append-entries rpc-params)
     raft))
 
 
