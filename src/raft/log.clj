@@ -1,6 +1,6 @@
 (ns raft.log
-  (:use raft.core)
-  (:require [raft.heartbeat :as heartbeat])
+  (:require [raft.core :as core]
+            [raft.heartbeat :as heartbeat])
   (:import [raft.core Raft Entry]))
 
 
@@ -73,22 +73,22 @@
                 raft (-> raft
                        (remove-conflicting-entries last-index entries)
                        ((partial apply add-entries))
-                       (apply-commits highest-committed-index))]
+                       (core/apply-commits highest-committed-index))]
             {:raft raft :term term :success true})
           {:raft raft :term term :success false})))))
 
 
 (defn as-complete?
   [raft term index]
-  (if (= (last-term raft) term)
+  (if (= (core/last-term raft) term)
     (<= (count (:log raft)) (inc (or index 0)))
-    (<= (or (last-term raft) -1) (or term -1))))
+    (<= (or (core/last-term raft) -1) (or term -1))))
 
 
 (extend Raft
   ILog
   {:append-entries (fn [raft & rest]
                      (update-in
-                       (apply append-entries-impl raft rest) [:raft] persist))
+                       (apply append-entries-impl raft rest) [:raft] core/persist))
 
    :as-complete? as-complete?})

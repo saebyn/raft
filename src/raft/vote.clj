@@ -1,6 +1,6 @@
 (ns raft.vote
-  (:use raft.core)
-  (:require [raft.heartbeat :as heartbeat]
+  (:require [raft.core :refer [persist]]
+            [raft.heartbeat :as heartbeat]
             [raft.log :as log])
   (:import [raft.core Raft]))
 

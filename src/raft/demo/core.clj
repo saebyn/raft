@@ -129,8 +129,9 @@
   (System/exit status))
 
 
-(defn- start-raft [main-options args]
+(defn- start-raft
   "Start a raft instance."
+  [main-options args]
   (let [{:keys [options arguments errors summary]} (parse-opts args start-raft-options)]
     ;; Handle help and error conditions
     (cond
@@ -155,8 +156,9 @@
     (run-server zmq-context this-server this-external-server broadcast-time))))
 
 
-(defn- send-command [main-options args]
+(defn- send-command
   "Send a command to a raft instance."
+  [main-options args]
   (let [{:keys [options arguments errors summary]} (parse-opts args send-command-options)]
   ;; Handle help and error conditions
   (cond

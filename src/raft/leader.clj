@@ -1,6 +1,7 @@
 (ns raft.leader
-  (:use clojure.tools.logging)
-  (:use raft.core)
+  (:require [clojure.tools.logging :as l]
+            [raft.core :refer [send-rpc-to-all send-rpc persist
+                               last-index last-term apply-commits]])
   (:import [raft.core Raft Entry]))
 
 
@@ -13,7 +14,7 @@
 (defn- vote-response-handler
   [current-term votes [server {term :term vote-granted :vote-granted}]]
 
-  (debug
+  (l/debug
     "Got vote response from" server "term:" term "vote granted:" vote-granted)
   (when term
     ; Update current term to newest
@@ -24,7 +25,7 @@
 
 
 (defn become-candidate-impl [raft]
-  (debug "Entering become candidate")
+  (l/debug "Entering become candidate")
   (let [raft (-> raft
                (update-in [:current-term] inc)
                (assoc :leader-state :candidate))
@@ -37,7 +38,7 @@
 
         server-count (inc (count (:servers raft)))]
 
-    (debug "Current term:" initial-term "total nodes:" server-count)
+    (l/debug "Current term:" initial-term "total nodes:" server-count)
 
     ; Dispatch out the RPC to all nodes
     ; Block only until the election timeout expires.
@@ -57,8 +58,8 @@
                   []
                   (:election-timeout-remaining raft))))
 
-    (debug "Highest term seen as candidate:" @current-term)
-    (debug "Votes for this candidate:" @votes)
+    (l/debug "Highest term seen as candidate:" @current-term)
+    (l/debug "Votes for this candidate:" @votes)
     (if (> @current-term initial-term)
       ; Return to being a follower because another server has a more recent
       ; term.
@@ -75,7 +76,7 @@
 
 
 (defn become-leader-impl [raft]
-  (debug "Entering become leader")
+  (l/debug "Entering become leader")
   (let [next-index (inc (or (last-index raft) -1))
         rpc-params  [[] (:commit-index raft)]
 
@@ -129,8 +130,9 @@
          :retries retries})))
 
 
-(defn- server-log-indices [raft]
+(defn- server-log-indices
   "Get the current log entry index of all servers."
+  [raft]
   (let [log-length (count (:log raft))
         next-index-fn (comp dec (partial min log-length) :next-index)]
     (map next-index-fn (vals (:servers raft)))))
@@ -194,7 +196,8 @@
                                             pending-entries)
                                           {:raft raft :retries []}
                                           responses)]
-      (debug "Leader push processed responses with" (count retries) "retries")
+      (l/debug
+        "Leader push processed responses with" (count retries) "retries")
       (if (seq retries)
         (recur (->> retries
                  (select-keys (:servers raft))
