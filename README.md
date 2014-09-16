@@ -28,6 +28,15 @@ See doc/intro.md for some additional notes.
 
 - More/better documentation
 
+- Use tools.trace rather than the ugly things I'm doing now in various places
+  to log out what's happening (but still using tools.logging for output).
+
+- Refactor raft.leader and raft.log functions
+
+  - Poorly documented
+
+  - Overly long
+
 
 ## Usage
 

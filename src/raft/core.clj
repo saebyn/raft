@@ -53,6 +53,7 @@
 
 (defn send-rpc
   "Send a remote procedure call to the selected servers."
+  ([raft command server-params] (send-rpc raft command server-params nil)) 
   ([raft command server-params timeout]
     (l/debug
       "Sending RPC" command
@@ -65,22 +66,28 @@
           (alts!! [(call-rpcs raft command server-params)
                    (async/timeout timeout)]))
         {})
-      (<!! (call-rpcs raft command server-params))))
-  ([raft command server-params]
-   (send-rpc raft command server-params nil)))
+      (<!! (call-rpcs raft command server-params)))))
 
 
 (defn send-rpc-to-all
   "Send a remote procedure call with the same parameters to all servers."
+  ([raft command params] (send-rpc-to-all raft command params nil)) 
   ([raft command params timeout]
     (send-rpc raft command
       (->> raft
           :servers
           keys
           (map (juxt identity (fn [_] params))))
-      timeout))
-  ([raft command params]
-   (send-rpc-to-all raft command params nil)))
+      timeout)))
+
+
+(defn- exec-state-machine
+  [{:keys [state-machine] :as raft} {:keys [command maybe-execution-chan]}]
+  {:pre [(not (nil? state-machine))]}
+  (let [[ value new-state-machine] (state-machine command)]
+    (when maybe-execution-chan
+      (put! maybe-execution-chan {:value value}))
+    (assoc raft :state-machine new-state-machine)))
 
 
 (defn apply-commits
@@ -93,20 +100,8 @@
       (or (nil? new-commit-index) (> (count (:log raft)) new-commit-index)))
     (assert (or (nil? new-commit-index) (>= new-commit-index commit-index)))
     (if-not (nil? new-commit-index)
-      (loop [state-machine (:state-machine raft)
-             entries (subvec (:log raft)
-                             (inc commit-index)
-                             (inc new-commit-index))]
-        (assert (not (nil? state-machine)))
-        (if (seq entries)
-          (let [[{command :command
-                  exec-chan :maybe-execution-chan
-                  :as entry} & entries] entries
-                [value new-state-machine] (state-machine command)]
-            (when exec-chan
-              (put! exec-chan {:value value}))
-            (recur new-state-machine entries))
-          (assoc raft :state-machine state-machine)))
+      (reduce exec-state-machine raft
+              (subvec (:log raft) (inc commit-index) (inc new-commit-index)))
       raft)))
 
 

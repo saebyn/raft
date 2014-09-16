@@ -50,6 +50,8 @@
     ; of the votes, or a majority becomes impossible.
     ; - could use a promise, where the handler checks for majority and resolves
     ;   the promise when its found - use timeout with deref to get timeout effect
+    ; UPDATE: yep, this is more possible now with the switch to core.async, so
+    ; I should get on that. Also, significantly refactor this code.
     (dorun
       (map
         (partial vote-response-handler current-term votes)
