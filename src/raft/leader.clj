@@ -65,6 +65,8 @@
     (if (> @current-term initial-term)
       ; Return to being a follower because another server has a more recent
       ; term.
+      ; TODO this should probably reset the election timeout too, but
+      ; using reset-election-timeout would introduce a circular dependency.
       (-> raft
         (assoc :current-term @current-term)
         (assoc :leader-state :follower))

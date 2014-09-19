@@ -25,7 +25,7 @@
   (Entry. term command nil))
 
 
-(defn- add-entries [raft entries]
+(defn- add-entries [[raft entries]]
   (update-in raft [:log] #(into % entries)))
 
 
@@ -54,6 +54,14 @@
           [raft entries])))))
 
 
+(defn- commit-entries
+  [raft last-index highest-committed-index entries]
+  (-> raft
+      (remove-conflicting-entries last-index (map make-entry entries))
+      add-entries
+      (core/apply-commits highest-committed-index)))
+
+
 (defn append-entries-impl
   [raft term entries highest-committed-index last-term last-index]
   (let [current-term (:current-term raft)]
@@ -67,15 +75,14 @@
       (let [raft (-> raft
                    (assoc :current-term term)
                    (assoc :leader-state :follower)
-                   heartbeat/reset-election-timeout)]
-        (if (entry-exists? raft last-term last-index)
-          (let [entries (map make-entry entries)
-                raft (-> raft
-                       (remove-conflicting-entries last-index entries)
-                       ((partial apply add-entries))
-                       (core/apply-commits highest-committed-index))]
-            {:raft raft :term term :success true})
-          {:raft raft :term term :success false})))))
+                   heartbeat/reset-election-timeout)
+            success (entry-exists? raft last-term last-index)
+            raft (if success
+                   (commit-entries raft
+                                   last-index highest-committed-index
+                                   entries)
+                   raft)]
+        {:raft raft :term term :success success}))))
 
 
 (defn as-complete?
