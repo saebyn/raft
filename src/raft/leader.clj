@@ -24,21 +24,11 @@
     (swap! votes inc)))
 
 
-(defn become-candidate-impl [raft]
-  (l/debug "Entering become candidate")
-  (let [raft (-> raft
-               (update-in [:current-term] inc)
-               (assoc :leader-state :candidate))
-        initial-term (or (:current-term raft) -1)
-
-        ; Votes for our election, include a vote for ourself.
+(defn- request-votes [raft initial-term]
+  (let [; Votes for our election, include a vote for ourself.
         votes (atom 1)
         ; The highest seen term, initially the known current term.
-        current-term (atom initial-term)
-
-        server-count (inc (count (:servers raft)))]
-
-    (l/debug "Current term:" initial-term "total nodes:" server-count)
+        current-term (atom initial-term)]
 
     ; Dispatch out the RPC to all nodes
     ; Block only until the election timeout expires.
@@ -59,20 +49,30 @@
                   :request-vote
                   []
                   (:election-timeout-remaining raft))))
+    [@current-term @votes]))
 
-    (l/debug "Highest term seen as candidate:" @current-term)
-    (l/debug "Votes for this candidate:" @votes)
-    (if (> @current-term initial-term)
+
+(defn become-candidate-impl [raft]
+  (l/debug "Entering become candidate")
+  (let [raft (-> raft
+               (update-in [:current-term] inc)
+               (assoc :leader-state :candidate))
+        initial-term (or (:current-term raft) -1)
+        server-count (inc (count (:servers raft)))
+        [current-term votes] (request-votes raft initial-term)]
+    (l/debug "Highest term seen as candidate:" current-term)
+    (l/debug "Votes for this candidate:" votes)
+    (if (> current-term initial-term)
       ; Return to being a follower because another server has a more recent
       ; term.
       ; TODO this should probably reset the election timeout too, but
       ; using reset-election-timeout would introduce a circular dependency.
       (-> raft
-        (assoc :current-term @current-term)
+        (assoc :current-term current-term)
         (assoc :leader-state :follower))
 
       ; Check to see if we won the election.
-      (if (> (/ @votes server-count) (/ 1 2))
+      (if (> (/ votes server-count) (/ 1 2))
         ; We won, become a leader
         (become-leader raft)
         ; We lost, remain a candidate for the next round.
