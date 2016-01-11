@@ -12,7 +12,9 @@
 
 
 ; Dispatch incoming RPCs via this.
-(defmulti rpc (fn [x & rest] x))
+(defmulti rpc (fn [x & rest]
+  (l/debug "rpc dispatch on: " x " with arg count: " (count rest))
+  x))
 
 
 (defn- swap-extract!
@@ -45,6 +47,14 @@
     (swap-extract! raft-instance extract request-vote
                    candidate-term candidate-server
 		   last-log-index last-log-term)))
+
+
+(defmethod rpc :is-leader
+  [command server]
+  "Handle a command to see if this node is the leader - send a boolean response."
+  (l/debug  ":is-leader: " command " " server " " raft-instance)
+  (l/debug "leader-state: " (:leader-state @raft-instance))
+  (= (:leader-state @raft-instance) :leader))
 
 
 (defmethod rpc :default [& args]
