@@ -55,8 +55,19 @@ You can run the demo with multiple nodes:
     $ lein run -- start -A tcp://localhost:2108 -X tcp://localhost:2109 tcp://localhost:2104 tcp://localhost:2106
 
 
+You can send an `:is-leader` command to a node:
+
+First start two nodes:
+
+    $ lein run -- start -A tcp://localhost:2104 -X tcp://localhost:2105 tcp://localhost:2106
+    $ lein run -- start -A tcp://localhost:2106 -X tcp://localhost:2107 tcp://localhost:2104
+
+Then send the command:
+
+    $ lein run -- send tcp://localhost:2104 :is-leader
+
 (Coming soon)
-You can send a command to a node:
+You can send other commands to a node:
 
     $ lein run -- send tcp://localhost:2105 my_command
 

@@ -92,7 +92,7 @@
       (l/debug "sending RPC via zmq to" server)
       (zmq/send conn (nippy/freeze [command args]))
       (let [resp (nippy/thaw (zmq/receive conn))]
-        (l/debug "got RPC response via zmq from" server)
+        (l/debug "got RPC response via zmq from server: " server " response: " resp)
         resp))))
 
 
@@ -136,6 +136,10 @@
        
        Options:
        \n" summary "
+
+       Commands:
+
+         is-leader Send a command to a raft node to see if it is the leader
        "))
 
 
@@ -204,7 +208,20 @@
       (not= (count arguments) 2) (exit 1 (send-command-usage summary))
       errors (exit 1 (error-msg errors)))
   
-    (println "TODO" main-options args options)))
+    (println "TODO" main-options args options)
+    (let [servers [(first arguments)]
+          this-external-server (first servers)
+          z (println "send-command this-external-server: " this-external-server)
+          zmq-context (zmq/context)
+          server-connections (into {}
+                                   (map (partial connect-server zmq-context)
+                                        servers))
+          command (read-string (first (rest arguments)))
+          xx (println "send-command command: " command)
+          args arguments]
+      (l/debug "sending command: " command " server: " this-external-server " args: " args)
+      (reset! connections server-connections)
+      (rpc this-external-server command args))))
 
 
 (defn -main
