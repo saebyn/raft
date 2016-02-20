@@ -3,10 +3,8 @@
             [clojure.core.async :refer [put! map< alts!! <!!] :as async]
             [midje.open-protocols :refer [defrecord-openly]]))
 
-
 (defprotocol IPersist
   (persist [raft] "Persists the essential state of the raft"))
-
 
 (defrecord Entry [term command maybe-execution-chan])
 
@@ -15,18 +13,16 @@
                         election-timeout-remaining commit-index]
   IPersist
   (persist [raft]
-    (let [store (:store raft)]
-      (store :log (:log raft))
-      (store :current-term (:current-term raft))
-      (store :voted-for (:voted-for raft)))
-    raft))
-
+           (let [store (:store raft)]
+             (store :log (:log raft))
+             (store :current-term (:current-term raft))
+             (store :voted-for (:voted-for raft)))
+           raft))
 
 ; Returns nil if log is empty.
 (def last-index (comp #(when-not (neg? %) %) dec count :log))
 
 (def last-term (comp :term last :log))
-
 
 (defn- call-rpc
   [{rpc :rpc
@@ -34,12 +30,11 @@
     this-server :this-server
     :as raft} command [server params]]
   (map< #(vector server %)
-    (apply rpc
-           server command current-term this-server
-           (last-index raft)
-           (last-term raft)
-           params)))
-
+        (apply rpc
+               server command current-term this-server
+               (last-index raft)
+               (last-term raft)
+               params)))
 
 (defn- call-rpcs [raft command server-params]
   (->> server-params
@@ -50,45 +45,41 @@
        ; make a channel with a map of server to their response
        (async/reduce conj {})))
 
-
 (defn send-rpc
   "Send a remote procedure call to the selected servers."
   ([raft command server-params] (send-rpc raft command server-params nil)) 
   ([raft command server-params timeout]
-    (l/debug
-      "Sending RPC" command
-      "with parameters" server-params
-      "and timeout" timeout)
+   (l/debug
+    "Sending RPC" command
+    "with parameters" server-params
+    "and timeout" timeout)
     ; TODO add some handling/logging for things timing out
-    (if timeout
-      (or 
-        (first 
-          (alts!! [(call-rpcs raft command server-params)
-                   (async/timeout timeout)]))
-        {})
-      (<!! (call-rpcs raft command server-params)))))
-
+   (if timeout
+     (or 
+      (first 
+       (alts!! [(call-rpcs raft command server-params)
+                (async/timeout timeout)]))
+      {})
+     (<!! (call-rpcs raft command server-params)))))
 
 (defn send-rpc-to-all
   "Send a remote procedure call with the same parameters to all servers."
   ([raft command params] (send-rpc-to-all raft command params nil)) 
   ([raft command params timeout]
-    (send-rpc raft command
-      (->> raft
-          :servers
-          keys
-          (map (juxt identity (fn [_] params))))
-      timeout)))
-
+   (send-rpc raft command
+             (->> raft
+                  :servers
+                  keys
+                  (map (juxt identity (fn [_] params))))
+             timeout)))
 
 (defn- exec-state-machine
   [{:keys [state-machine] :as raft} {:keys [command maybe-execution-chan]}]
   {:pre [(not (nil? state-machine))]}
-  (let [[ value new-state-machine] (state-machine command)]
+  (let [[value new-state-machine] (state-machine command)]
     (when maybe-execution-chan
       (put! maybe-execution-chan {:value value}))
     (assoc raft :state-machine new-state-machine)))
-
 
 (defn apply-commits
   [raft new-commit-index]
@@ -97,13 +88,12 @@
         raft (assoc raft :commit-index new-commit-index)]
     (assert (> (count (:log raft)) commit-index))
     (assert
-      (or (nil? new-commit-index) (> (count (:log raft)) new-commit-index)))
+     (or (nil? new-commit-index) (> (count (:log raft)) new-commit-index)))
     (assert (or (nil? new-commit-index) (>= new-commit-index commit-index)))
     (if-not (nil? new-commit-index)
       (reduce exec-state-machine raft
               (subvec (:log raft) (inc commit-index) (inc new-commit-index)))
       raft)))
-
 
 ;
 ; create-raft

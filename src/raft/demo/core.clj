@@ -16,13 +16,10 @@
             [taoensso.nippy :as nippy]
             [clojure.tools.cli :refer [parse-opts]]))
 
-
 (set-logger! :level :debug)
 (alter-var-root #'include-midje-checks (constantly false))
 
-
 (def connections (atom {}))
-
 
 ; TODO better error handling when nonsense gets here
 (defn- connect-server
@@ -30,7 +27,6 @@
   [zmq-context server]
   [server (doto (zmq/socket zmq-context :req)
             (zmq/connect server))])
-
 
 (defn- read-all-storage [path]
   (try
@@ -41,17 +37,14 @@
       (l/warn "Failed to read from storage.")
       {})))
 
-
 (defn- read-storage [path k]
   (get (read-all-storage path) k))
-
 
 (defn- write-storage [path k v]
   (let [data (read-all-storage path)]
     (with-open [writer (io/writer path)]
       (.write writer (str (assoc data k v))))
     nil))
-
 
 (defn- storage [path]
   (let [read-ch (chan)
@@ -71,13 +64,11 @@
        (l/debug "Putting key" k "into storage")
        (>!! write-ch [k v])))))
 
-
 (defn- fake-state-machine
   "Dummy state machine."
   [command]
   (l/debug "Got FSM input" command)
   [nil fake-state-machine])
-
 
 (defn- rpc
   "Make an remote procedure call to a raft server node.
@@ -95,7 +86,6 @@
         (l/debug "got RPC response via zmq from server: " server " response: " resp)
         resp))))
 
-
 (def ^:private start-raft-options
   [["-h" "--help" "Show this help"
     :default false :flag true]
@@ -110,14 +100,11 @@
    ["-b" "--broadcast-time N" "Time between heartbeat messages, in milliseconds"
     :default "15"]])
 
-
 (def ^:private send-command-options
   [])
 
-
 (def ^:private main-options
   [])
-
 
 (defn- start-raft-usage [summary]
   (str "Usage: program-name start [options]"
@@ -127,7 +114,6 @@
        Options:
        \n" summary "
        "))
-
 
 (defn- send-command-usage [summary]
   (str "Usage: program-name send [options]"
@@ -142,7 +128,6 @@
          is-leader Send a command to a raft node to see if it is the leader
        "))
 
-
 (defn- main-usage [summary]
   (str "Usage: program-name [options] command [command options]
        
@@ -155,16 +140,13 @@
           send     Send command to a raft node
        "))
 
-
 (defn error-msg [errors]
   (str "The following errors occurred while parsing your command:\n\n"
        (string/join \newline errors)))
 
-
 (defn exit  [status msg]
   (println msg)
   (System/exit status))
-
 
 (defn- start-raft
   "Start a raft instance."
@@ -194,8 +176,7 @@
       (reset! raft-instance raft)
       (reset! connections server-connections)
       (run-server
-        zmq-context this-server this-external-server broadcast-time))))
-
+       zmq-context this-server this-external-server broadcast-time))))
 
 (defn- send-command
   "Send a command to a raft instance."
@@ -207,7 +188,7 @@
       (:help options) (exit 0 (send-command-usage summary))
       (not= (count arguments) 2) (exit 1 (send-command-usage summary))
       errors (exit 1 (error-msg errors)))
-  
+
     (println "TODO" main-options args options)
     (let [servers [(first arguments)]
           this-external-server (first servers)
@@ -222,7 +203,6 @@
       (l/debug "sending command: " command " server: " this-external-server " args: " args)
       (reset! connections server-connections)
       (rpc this-external-server command args))))
-
 
 (defn -main
   "Raft demo server."
