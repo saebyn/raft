@@ -4,25 +4,22 @@
                                last-index last-term apply-commits]])
   (:import [raft.core Raft Entry]))
 
-
 (defprotocol ILeader
   (become-candidate [raft] "Makes the raft a candidate.")
   (become-leader [raft] "Makes the raft a leader.")
   (push [raft] "Pushed pending entries from the log to all followers."))
 
-
 (defn- vote-response-handler
   [current-term votes [server {term :term vote-granted :vote-granted}]]
 
   (l/debug
-    "Got vote response from" server "term:" term "vote granted:" vote-granted)
+   "Got vote response from" server "term:" term "vote granted:" vote-granted)
   (when term
     ; Update current term to newest
     (swap! current-term max term))
   (when vote-granted
     ; Add the vote, if granted
     (swap! votes inc)))
-
 
 (defn- request-votes [raft initial-term]
   (let [; Votes for our election, include a vote for ourself.
@@ -43,20 +40,19 @@
     ; UPDATE: yep, this is more possible now with the switch to core.async, so
     ; I should get on that. Also, significantly refactor this code.
     (dorun
-      (map
-        (partial vote-response-handler current-term votes)
-        (send-rpc-to-all raft
-                  :request-vote
-                  []
-                  (:election-timeout-remaining raft))))
+     (map
+      (partial vote-response-handler current-term votes)
+      (send-rpc-to-all raft
+                       :request-vote
+                       []
+                       (:election-timeout-remaining raft))))
     [@current-term @votes]))
-
 
 (defn become-candidate-impl [raft]
   (l/debug "Entering become candidate")
   (let [raft (-> raft
-               (update-in [:current-term] inc)
-               (assoc :leader-state :candidate))
+                 (update-in [:current-term] inc)
+                 (assoc :leader-state :candidate))
         initial-term (or (:current-term raft) -1)
         server-count (inc (count (:servers raft)))
         [current-term votes] (request-votes raft initial-term)]
@@ -68,8 +64,8 @@
       ; TODO this should probably reset the election timeout too, but
       ; using reset-election-timeout would introduce a circular dependency.
       (-> raft
-        (assoc :current-term current-term)
-        (assoc :leader-state :follower))
+          (assoc :current-term current-term)
+          (assoc :leader-state :follower))
 
       ; Check to see if we won the election.
       (if (> (/ votes server-count) (/ 1 2))
@@ -78,34 +74,31 @@
         ; We lost, remain a candidate for the next round.
         raft))))
 
-
 (defn become-leader-impl [raft]
   (l/debug "Entering become leader")
   (let [next-index (inc (or (last-index raft) -1))
         rpc-params  [[] (:commit-index raft)]
 
         raft (-> raft
-               (assoc :leader-state :leader)
-               (update-in [:servers]
-                          #(into {}
-                                 (map (fn [[server details]]
-                                        [server
-                                         (assoc details
-                                                :next-index
-                                                next-index)]) %))))]
+                 (assoc :leader-state :leader)
+                 (update-in [:servers]
+                            #(into {}
+                                   (map (fn [[server details]]
+                                          [server
+                                           (assoc details
+                                                  :next-index
+                                                  next-index)]) %))))]
 
     (send-rpc-to-all raft :append-entries rpc-params)
     raft))
-
 
 (defn- get-entries-to-send [raft [server {next-index :next-index}]]
   (assert (<= next-index (count (:log raft))))
   (let [next-entries (map (juxt :term :command)
                           (-> raft
-                            :log
-                            (subvec next-index)))]
+                              :log
+                              (subvec next-index)))]
     [server [next-entries (:commit-index raft)]]))
-
 
 (defn- handle-push-response [sent-entries
                              {raft :raft retries :retries stop :stop}
@@ -115,8 +108,8 @@
 
     ; If follower sends back newer term, use it and become follower
     (> term (:current-term raft)) {:raft (-> raft
-                                           (assoc :current-term term)
-                                           (assoc :leader-state :follower))
+                                             (assoc :current-term term)
+                                             (assoc :leader-state :follower))
                                    :retries []
                                    :stop true}
 
@@ -128,11 +121,10 @@
 
     ; if succeeds, update next-index
     :else
-      (let [sent-entry-count (count (first (sent-entries server)))]
-        {:raft (update-in raft [:servers server :next-index]
-                          (fnil + -1) sent-entry-count)
-         :retries retries})))
-
+    (let [sent-entry-count (count (first (sent-entries server)))]
+      {:raft (update-in raft [:servers server :next-index]
+                        (fnil + -1) sent-entry-count)
+       :retries retries})))
 
 (defn- server-log-indices
   "Get the current log entry index of all servers."
@@ -141,7 +133,6 @@
         next-index-fn (comp dec (partial min log-length) :next-index)]
     (map next-index-fn (vals (:servers raft)))))
 
-
 (defn- is-majority? [raft n]
   ; Add one to servers count to account for this server.
   (let [server-count (-> raft
@@ -149,7 +140,6 @@
                          count
                          int)]
     (> n (/ server-count 2))))
-
 
 (defn- get-majority-index [raft]
   ; Maintain a sorted frequency map of entry indices, which
@@ -168,17 +158,15 @@
             ; Merge this index's count into the following index, and remove
             ; `index`.
             (recur (-> entry-index-freqs
-                     (update-in [next-index] + n)
+                       (update-in [next-index] + n)
                      ; Remove this index.
-                     (dissoc index))))
+                       (dissoc index))))
           index)))))
-
 
 (defn- is-majority-holding-current-term? [raft majority-index]
   (assert (< majority-index (count (:log raft))))
   (some #{(:current-term raft)}
         (map :term (subvec (:log raft) 0 (inc majority-index)))))
-
 
 (defn- update-commit-index [raft]
   (let [majority-index (get-majority-index raft)]
@@ -187,29 +175,26 @@
       (apply-commits raft majority-index)
       raft)))
 
-
 (defn push-impl [raft]
   (loop [pending-entries (->> raft
-                          :servers
-                          (map (partial get-entries-to-send raft))
-                          (into {}))]
+                              :servers
+                              (map (partial get-entries-to-send raft))
+                              (into {}))]
     (let [responses (send-rpc raft :append-entries pending-entries)
           {raft :raft retries :retries} (reduce
-                                          (partial
-                                            handle-push-response
-                                            pending-entries)
-                                          {:raft raft :retries []}
-                                          responses)]
+                                         (partial
+                                          handle-push-response
+                                          pending-entries)
+                                         {:raft raft :retries []}
+                                         responses)]
       (l/debug
-        "Leader push processed responses with" (count retries) "retries")
+       "Leader push processed responses with" (count retries) "retries")
       (if (seq retries)
         (recur (->> retries
-                 (select-keys (:servers raft))
-                 (map (partial get-entries-to-send raft))
-                 (into {})))
+                    (select-keys (:servers raft))
+                    (map (partial get-entries-to-send raft))
+                    (into {})))
         raft))))
-
-
 
 (extend Raft
   ILeader

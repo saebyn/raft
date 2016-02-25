@@ -6,7 +6,8 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/tools.logging "0.3.0"]]
   :main raft.demo.core
-  :profiles {:dev {:plugins [[lein-midje "3.1.3"]]
+  :profiles {:dev {:plugins [[lein-midje "3.1.3"]
+                             [lein-cljfmt "0.3.0"]]
                    :dependencies [[midje "1.6.3"]
                                   [lein-midje "3.1.3"]
                                   [org.clojure/core.async "0.1.338.0-5c5012-alpha"]

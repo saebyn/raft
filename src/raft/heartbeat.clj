@@ -3,7 +3,6 @@
             [raft.leader :as leader])
   (:import [raft.core Raft]))
 
-
 (defprotocol IHeartbeat
   (reset-election-timeout
     [raft] "Resets the remaining time until an election starts.")
@@ -12,18 +11,15 @@
   (heartbeat
     [raft] "Beats the heart of the raft"))
 
-
 (defn decrease-election-timeout [raft amount]
   (l/debug "decreasing election timeout" raft amount)
-  (update-in raft [:election-timeout-remaining] #(max 0 ( - % amount))))
-
+  (update-in raft [:election-timeout-remaining] #(max 0 (- % amount))))
 
 (defn- generate-timeout
   "Generates a uniform random timeout in the range 
    [base-timeout, 2*base-timeout)."
   [base-timeout]
   (+ base-timeout (rand-int base-timeout)))
-
 
 (defn- election-timer-unset? [raft]
   (nil? (:election-timeout-remaining raft)))
@@ -50,13 +46,11 @@
         (l/debug "Heartbeat becoming candidate")
         (leader/become-candidate (reset-election-timeout raft))))))
 
-
 (defn reset-election-timeout [raft]
   (l/debug "Resetting election timeout")
   (assoc raft
          :election-timeout-remaining
          (generate-timeout (:election-timeout raft))))
-
 
 (extend Raft
   IHeartbeat
